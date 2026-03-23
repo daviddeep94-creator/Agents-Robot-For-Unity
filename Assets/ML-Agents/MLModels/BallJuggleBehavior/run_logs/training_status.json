@@ -1,0 +1,65 @@
+{
+    "BallJuggleBehavior": {
+        "checkpoints": [
+            {
+                "steps": 149879,
+                "file_path": "F:\\GameProject\\AI Robot\\Assets\\ML-Agents\\MLModels\\BallJuggleBehavior\\BallJuggleBehavior\\BallJuggleBehavior-149879.onnx",
+                "reward": 196.0614708832332,
+                "creation_time": 1774189591.16213,
+                "auxillary_file_paths": [
+                    "F:\\GameProject\\AI Robot\\Assets\\ML-Agents\\MLModels\\BallJuggleBehavior\\BallJuggleBehavior\\BallJuggleBehavior-149879.pt"
+                ]
+            },
+            {
+                "steps": 199916,
+                "file_path": "F:\\GameProject\\AI Robot\\Assets\\ML-Agents\\MLModels\\BallJuggleBehavior\\BallJuggleBehavior\\BallJuggleBehavior-199916.onnx",
+                "reward": 599.8440170288086,
+                "creation_time": 1774189841.8414435,
+                "auxillary_file_paths": [
+                    "F:\\GameProject\\AI Robot\\Assets\\ML-Agents\\MLModels\\BallJuggleBehavior\\BallJuggleBehavior\\BallJuggleBehavior-199916.pt"
+                ]
+            },
+            {
+                "steps": 249880,
+                "file_path": "F:\\GameProject\\AI Robot\\Assets\\ML-Agents\\MLModels\\BallJuggleBehavior\\BallJuggleBehavior\\BallJuggleBehavior-249880.onnx",
+                "reward": null,
+                "creation_time": 1774190163.227482,
+                "auxillary_file_paths": [
+                    "F:\\GameProject\\AI Robot\\Assets\\ML-Agents\\MLModels\\BallJuggleBehavior\\BallJuggleBehavior\\BallJuggleBehavior-249880.pt"
+                ]
+            },
+            {
+                "steps": 299868,
+                "file_path": "F:\\GameProject\\AI Robot\\Assets\\ML-Agents\\MLModels\\BallJuggleBehavior\\BallJuggleBehavior\\BallJuggleBehavior-299868.onnx",
+                "reward": 640.940788269043,
+                "creation_time": 1774190438.0102253,
+                "auxillary_file_paths": [
+                    "F:\\GameProject\\AI Robot\\Assets\\ML-Agents\\MLModels\\BallJuggleBehavior\\BallJuggleBehavior\\BallJuggleBehavior-299868.pt"
+                ]
+            },
+            {
+                "steps": 301868,
+                "file_path": "F:\\GameProject\\AI Robot\\Assets\\ML-Agents\\MLModels\\BallJuggleBehavior\\BallJuggleBehavior\\BallJuggleBehavior-301868.onnx",
+                "reward": 635.8322347005209,
+                "creation_time": 1774190444.945343,
+                "auxillary_file_paths": [
+                    "F:\\GameProject\\AI Robot\\Assets\\ML-Agents\\MLModels\\BallJuggleBehavior\\BallJuggleBehavior\\BallJuggleBehavior-301868.pt"
+                ]
+            }
+        ],
+        "final_checkpoint": {
+            "steps": 301868,
+            "file_path": "F:\\GameProject\\AI Robot\\Assets\\ML-Agents\\MLModels\\BallJuggleBehavior\\BallJuggleBehavior.onnx",
+            "reward": 635.8322347005209,
+            "creation_time": 1774190444.945343,
+            "auxillary_file_paths": [
+                "F:\\GameProject\\AI Robot\\Assets\\ML-Agents\\MLModels\\BallJuggleBehavior\\BallJuggleBehavior\\BallJuggleBehavior-301868.pt"
+            ]
+        }
+    },
+    "metadata": {
+        "stats_format_version": "0.3.0",
+        "mlagents_version": "1.1.0",
+        "torch_version": "2.1.1+cpu"
+    }
+}

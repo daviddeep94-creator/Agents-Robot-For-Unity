@@ -85,8 +85,11 @@ gamma: 0.995
 ### 训练命令
 
 ```bash
-# 在Unity Assets/ML-Agents目录下运行
-mlagents-learn training_config.yaml --run-id=BalanceTraining
+# 方法1：使用双引号包裹完整路径
+mlagents-learn "F:\GameProject\AI Robot\Assets\ML-Agents\training_config.yaml" `
+--run-id=RobotBalanceAgent `
+--results-dir="F:\GameProject\AI Robot\Assets\ML-Agents\MLModels" 
+
 
 # 训练完成后查看结果
 tensorboard --logdir=results

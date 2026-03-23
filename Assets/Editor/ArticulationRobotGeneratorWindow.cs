@@ -323,8 +323,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
 
         // 根节点（从地面开始，方便观察）
         // 地面(Feet) y=0, hipLevel=legLength
-        float hipLevelY = legLength;
-        float pelvisJointY = hipLevelY; // 骨盆关节位置
+        float pelvisJointY = legLength + pelvisHeight * 0.5f + footSize.y; // 骨盆关节位置
 
         // 为了使层级清晰：pelvis 为 Articulation 根，其余作为子链接挂上去。
         // 骨盆关节节点（无实体）

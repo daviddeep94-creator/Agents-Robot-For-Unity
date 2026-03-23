@@ -13,12 +13,15 @@ public class RobotBalanceAgent : Agent
     [Tooltip("机器人根节点ArticulationBody")]
     [SerializeField] private ArticulationBody robotRoot;
 
+    [Tooltip("控制力放大")]
+    [SerializeField] private float force = 50f;
+
     [Header("训练目标")]
     [Tooltip("目标站立时间（秒），达到后给予奖励")]
     [SerializeField] private float targetStandTime = 10f;
 
     [Tooltip("机器人重心目标高度（米）")]
-    [SerializeField] private float targetHeight = 0.875f;
+    [SerializeField] private float targetHeight = 1f;
 
     [Tooltip("最大允许的倾斜角度（度）")]
     [SerializeField] private float maxTiltAngle = 30f;
@@ -280,9 +283,6 @@ public class RobotBalanceAgent : Agent
         {
             Debug.Log("Episode Start: 重置机器人姿态");
         }
-
-        // 请求第一个决策（ML-Agents 2.0 必须显式请求）
-        RequestDecision();
     }
 
     /// <summary>
@@ -306,21 +306,6 @@ public class RobotBalanceAgent : Agent
         );
 
         isResetting = false;
-    }
-
-    /// <summary>
-    /// 获取关节在层级中的深度
-    /// </summary>
-    private int GetJointDepth(ArticulationBody joint)
-    {
-        int depth = 0;
-        Transform current = joint.transform;
-        while (current.parent != null && current != robotRoot.transform)
-        {
-            depth++;
-            current = current.parent;
-        }
-        return depth;
     }
 
     public override void CollectObservations(VectorSensor sensor)
@@ -452,30 +437,8 @@ public class RobotBalanceAgent : Agent
 
         Debug.Log($"[RobotBalanceAgent] OnActionReceived 被调用: Step={StepCount}");
 
-        // 每100帧打印一次动作值
-        if (StepCount % 100 == 0)
-        {
-            string actionStr = "";
-            for (int i = 0; i < 12 && i < actions.ContinuousActions.Length; i++)
-            {
-                actionStr += $"{actions.ContinuousActions[i]:F2} ";
-            }
-            Debug.Log($"[RobotBalanceAgent] OnActionReceived: Step={StepCount}, 动作=[{actionStr}]");
-        }
 
-        // 重置后的前几帧跳过动作应用，让物理稳定
-        if (framesSinceReset < RESET_STABLE_FRAMES)
-        {
-            framesSinceReset++;
-            if (framesSinceReset == RESET_STABLE_FRAMES)
-            {
-                Debug.Log("[RobotBalanceAgent] 物理已稳定，开始应用动作");
-            }
-            episodeTimer += Time.fixedDeltaTime;
-            return;
-        }
-
-        // 应用关节力矩（12个连续动作对应12个关节）
+        // 应用关节力矩（12个连续动作对应12个关节）26d
         ApplyJointForces(actions.ContinuousActions);
 
         // 计算奖励
@@ -564,6 +527,10 @@ public class RobotBalanceAgent : Agent
 
         int index = System.Array.IndexOf(allJoints, joint);
         if (index < 0) return;
+
+        xForce *= force;
+        yForce *= force;
+        zForce *= force;
 
         // 获取当前 drive 目标
         var xDrive = joint.xDrive;
@@ -693,8 +660,7 @@ public class RobotBalanceAgent : Agent
         {
             Debug.Log($"[RobotBalanceAgent] 失败: 倾斜角度 {currentTiltAngle:F1}° > {maxTiltAngle}°");
             AddReward(-1f); // 失败惩罚
-            EndEpisodeAndNotify();
-            base.EndEpisode(); // ML-Agents 的 EndEpisode（只调用一次）
+            //EndEpisode();
             if (showDebugInfo)
             {
                 Debug.Log($"Episode Failed: 倾斜角度 {currentTiltAngle:F1}° 超过 {maxTiltAngle}°");
@@ -707,8 +673,7 @@ public class RobotBalanceAgent : Agent
         {
             Debug.Log($"[RobotBalanceAgent] 失败: 高度 {currentHeight:F2}m < {targetHeight * 0.5f:F2}m (阈值)");
             AddReward(-1f);
-            EndEpisodeAndNotify();
-            base.EndEpisode(); // ML-Agents 的 EndEpisode（只调用一次）
+            //EndEpisode();
             if (showDebugInfo)
             {
                 Debug.Log($"Episode Failed: 高度 {currentHeight:F2}m 低于阈值");
@@ -724,8 +689,7 @@ public class RobotBalanceAgent : Agent
         if (horizontalDistance > 0.5f)
         {
             AddReward(-0.5f);
-            EndEpisodeAndNotify();
-            base.EndEpisode(); // ML-Agents 的 EndEpisode（只调用一次）
+            //EndEpisode();
             if (showDebugInfo)
             {
                 Debug.Log($"Episode Failed: 偏离位置 {horizontalDistance:F2}m");
@@ -737,8 +701,7 @@ public class RobotBalanceAgent : Agent
         if (episodeTimer >= targetStandTime)
         {
             AddReward(completionReward);
-            EndEpisodeAndNotify();
-            base.EndEpisode(); // ML-Agents 的 EndEpisode（只调用一次）
+            EndEpisode();
             if (showDebugInfo)
             {
                 Debug.Log($"Episode Success: 成功站立 {episodeTimer:F1}秒");

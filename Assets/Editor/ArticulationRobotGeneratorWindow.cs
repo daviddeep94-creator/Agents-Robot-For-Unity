@@ -42,8 +42,33 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
     [SerializeField] private float angularDamping = 2f;
     [SerializeField] private float jointFriction = 0.5f;
 
-    [Header("关节驱动(仅用于提供\"阻尼效果\")")]
+    [Header("关节驱动参数")]
     [SerializeField] private float passiveJointForceLimit = 1e6f;
+
+    [Header("关节刚度参数 (AI 训练用固定值)")]
+    [Tooltip("全局刚度缩放因子 - 控制所有关节的整体刚度")]
+    [SerializeField] private float globalStiffnessScale = 1.0f;
+
+    [Tooltip("髋关节刚度 - 需要大力气支撑身体")]
+    [SerializeField] private float hipJointStiffness = 30000f;
+
+    [Tooltip("膝关节刚度 - 主要承重关节")]
+    [SerializeField] private float kneeJointStiffness = 20000f;
+
+    [Tooltip("踝关节刚度 - 平衡控制")]
+    [SerializeField] private float ankleJointStiffness = 5000f;
+
+    [Tooltip("肩关节刚度 - 手臂活动")]
+    [SerializeField] private float shoulderJointStiffness = 10000f;
+
+    [Tooltip("肘关节刚度 - 精细控制")]
+    [SerializeField] private float elbowJointStiffness = 5000f;
+
+    [Tooltip("躯干关节刚度 - 身体平衡")]
+    [SerializeField] private float torsoJointStiffness = 10000f;
+
+    [Tooltip("颈部关节刚度 - 头部转动")]
+    [SerializeField] private float neckJointStiffness = 3000f;
 
     [Header("关节旋转限制(度) - Lower, Upper")]
     // 臀部：前后、左右、扭转
@@ -103,16 +128,16 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         // 基础尺寸
         EditorGUILayout.LabelField("基础尺寸", EditorStyles.boldLabel);
         EditorGUILayout.BeginHorizontal();
-        robotHeight = EditorGUILayout.FloatField("机器高度", robotHeight, GUILayout.Width(120));
-        legLengthNormalized = EditorGUILayout.FloatField("腿长", legLengthNormalized, GUILayout.Width(100));
-        torsoWidthNormalized = EditorGUILayout.FloatField("躯干宽度", torsoWidthNormalized, GUILayout.Width(100));
-        torsoDepthNormalized = EditorGUILayout.FloatField("躯干厚度", torsoDepthNormalized, GUILayout.Width(100));
+        robotHeight = EditorGUILayout.FloatField("机器高度", robotHeight, GUILayout.Width(200));
+        legLengthNormalized = EditorGUILayout.FloatField("腿长", legLengthNormalized, GUILayout.Width(200));
+        torsoWidthNormalized = EditorGUILayout.FloatField("躯干宽度", torsoWidthNormalized, GUILayout.Width(200));
+        torsoDepthNormalized = EditorGUILayout.FloatField("躯干厚度", torsoDepthNormalized, GUILayout.Width(200));
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.BeginHorizontal();
-        pelvisWidthNormalized = EditorGUILayout.FloatField("臀部宽度", pelvisWidthNormalized, GUILayout.Width(100));
-        armLengthNormalized = EditorGUILayout.FloatField("手臂长度", armLengthNormalized, GUILayout.Width(100));
-        headSizeNormalized = EditorGUILayout.FloatField("头部大小", headSizeNormalized, GUILayout.Width(100));
+        pelvisWidthNormalized = EditorGUILayout.FloatField("臀部宽度", pelvisWidthNormalized, GUILayout.Width(200));
+        armLengthNormalized = EditorGUILayout.FloatField("手臂长度", armLengthNormalized, GUILayout.Width(200));
+        headSizeNormalized = EditorGUILayout.FloatField("头部大小", headSizeNormalized, GUILayout.Width(200));
         EditorGUILayout.EndHorizontal();
 
         footSizeNormalized = EditorGUILayout.Vector3Field("脚板尺寸", footSizeNormalized);
@@ -121,12 +146,32 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         EditorGUILayout.Space(10);
         EditorGUILayout.LabelField("质量与阻尼", EditorStyles.boldLabel);
         EditorGUILayout.BeginHorizontal();
-        totalMassKg = EditorGUILayout.FloatField("总重量(kg)", totalMassKg, GUILayout.Width(120));
-        angularDamping = EditorGUILayout.FloatField("关节阻尼", angularDamping, GUILayout.Width(100));
-        jointFriction = EditorGUILayout.FloatField("关节摩擦", jointFriction, GUILayout.Width(100));
+        totalMassKg = EditorGUILayout.FloatField("总重量(kg)", totalMassKg, GUILayout.Width(200));
+        angularDamping = EditorGUILayout.FloatField("关节阻尼", angularDamping, GUILayout.Width(200));
+        jointFriction = EditorGUILayout.FloatField("关节摩擦", jointFriction, GUILayout.Width(200));
         EditorGUILayout.EndHorizontal();
 
         passiveJointForceLimit = EditorGUILayout.FloatField("关节驱动力上限", passiveJointForceLimit);
+
+        // 关节刚度参数
+        EditorGUILayout.Space(10);
+        EditorGUILayout.LabelField("关节刚度参数 (AI 训练用固定值)", EditorStyles.boldLabel);
+
+        globalStiffnessScale = EditorGUILayout.Slider("全局刚度缩放", globalStiffnessScale, 0.1f, 3.0f);
+
+        EditorGUILayout.BeginHorizontal();
+        hipJointStiffness = EditorGUILayout.FloatField("髋关节刚度", hipJointStiffness, GUILayout.Width(200));
+        kneeJointStiffness = EditorGUILayout.FloatField("膝关节刚度", kneeJointStiffness, GUILayout.Width(200));
+        ankleJointStiffness = EditorGUILayout.FloatField("踝关节刚度", ankleJointStiffness, GUILayout.Width(200));
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.BeginHorizontal();
+        shoulderJointStiffness = EditorGUILayout.FloatField("肩关节刚度", shoulderJointStiffness, GUILayout.Width(200));
+        elbowJointStiffness = EditorGUILayout.FloatField("肘关节刚度", elbowJointStiffness, GUILayout.Width(200));
+        torsoJointStiffness = EditorGUILayout.FloatField("躯干关节刚度", torsoJointStiffness, GUILayout.Width(200));
+        EditorGUILayout.EndHorizontal();
+
+        neckJointStiffness = EditorGUILayout.FloatField("颈部关节刚度", neckJointStiffness);
 
         // 关节旋转限制
         EditorGUILayout.Space(10);
@@ -135,33 +180,33 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         EditorGUILayout.Space(4);
         EditorGUILayout.LabelField("臀部", EditorStyles.miniBoldLabel);
         EditorGUILayout.BeginHorizontal();
-        pelvisSwingY = EditorGUILayout.Vector2Field("前后", pelvisSwingY, GUILayout.Width(120));
-        pelvisSwingZ = EditorGUILayout.Vector2Field("左右", pelvisSwingZ, GUILayout.Width(120));
-        pelvisTwist = EditorGUILayout.Vector2Field("扭转", pelvisTwist, GUILayout.Width(120));
+        pelvisSwingY = EditorGUILayout.Vector2Field("前后", pelvisSwingY, GUILayout.Width(200));
+        pelvisSwingZ = EditorGUILayout.Vector2Field("左右", pelvisSwingZ, GUILayout.Width(200));
+        pelvisTwist = EditorGUILayout.Vector2Field("扭转", pelvisTwist, GUILayout.Width(200));
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.Space(4);
         EditorGUILayout.LabelField("躯干", EditorStyles.miniBoldLabel);
         EditorGUILayout.BeginHorizontal();
-        torsoSwingY = EditorGUILayout.Vector2Field("前后", torsoSwingY, GUILayout.Width(120));
-        torsoSwingZ = EditorGUILayout.Vector2Field("左右", torsoSwingZ, GUILayout.Width(120));
-        torsoTwist = EditorGUILayout.Vector2Field("扭转", torsoTwist, GUILayout.Width(120));
+        torsoSwingY = EditorGUILayout.Vector2Field("前后", torsoSwingY, GUILayout.Width(200));
+        torsoSwingZ = EditorGUILayout.Vector2Field("左右", torsoSwingZ, GUILayout.Width(200));
+        torsoTwist = EditorGUILayout.Vector2Field("扭转", torsoTwist, GUILayout.Width(200));
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.Space(4);
         EditorGUILayout.LabelField("颈部", EditorStyles.miniBoldLabel);
         EditorGUILayout.BeginHorizontal();
-        neckSwingY = EditorGUILayout.Vector2Field("前后", neckSwingY, GUILayout.Width(120));
-        neckSwingZ = EditorGUILayout.Vector2Field("左右", neckSwingZ, GUILayout.Width(120));
-        neckTwist = EditorGUILayout.Vector2Field("扭转", neckTwist, GUILayout.Width(120));
+        neckSwingY = EditorGUILayout.Vector2Field("前后", neckSwingY, GUILayout.Width(200));
+        neckSwingZ = EditorGUILayout.Vector2Field("左右", neckSwingZ, GUILayout.Width(200));
+        neckTwist = EditorGUILayout.Vector2Field("扭转", neckTwist, GUILayout.Width(200));
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.Space(4);
         EditorGUILayout.LabelField("髋关节", EditorStyles.miniBoldLabel);
         EditorGUILayout.BeginHorizontal();
-        hipTwist = EditorGUILayout.Vector2Field("前后(X)", hipTwist, GUILayout.Width(120));
-        hipSwingY = EditorGUILayout.Vector2Field("扭转(Y)", hipSwingY, GUILayout.Width(120));
-        hipSwingZ = EditorGUILayout.Vector2Field("左右(Z)", hipSwingZ, GUILayout.Width(120));
+        hipTwist = EditorGUILayout.Vector2Field("前后(X)", hipTwist, GUILayout.Width(200));
+        hipSwingY = EditorGUILayout.Vector2Field("扭转(Y)", hipSwingY, GUILayout.Width(200));
+        hipSwingZ = EditorGUILayout.Vector2Field("左右(Z)", hipSwingZ, GUILayout.Width(200));
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.Space(4);
@@ -171,17 +216,17 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         EditorGUILayout.Space(4);
         EditorGUILayout.LabelField("踝关节", EditorStyles.miniBoldLabel);
         EditorGUILayout.BeginHorizontal();
-        ankleTwist = EditorGUILayout.Vector2Field("前后(X)", ankleTwist, GUILayout.Width(120));
-        ankleSwingY = EditorGUILayout.Vector2Field("扭转(Y)", ankleSwingY, GUILayout.Width(120));
-        ankleSwingZ = EditorGUILayout.Vector2Field("左右(Z)", ankleSwingZ, GUILayout.Width(120));
+        ankleTwist = EditorGUILayout.Vector2Field("前后(X)", ankleTwist, GUILayout.Width(200));
+        ankleSwingY = EditorGUILayout.Vector2Field("扭转(Y)", ankleSwingY, GUILayout.Width(200));
+        ankleSwingZ = EditorGUILayout.Vector2Field("左右(Z)", ankleSwingZ, GUILayout.Width(200));
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.Space(4);
         EditorGUILayout.LabelField("肩关节", EditorStyles.miniBoldLabel);
         EditorGUILayout.BeginHorizontal();
-        shoulderTwist = EditorGUILayout.Vector2Field("前后(X)", shoulderTwist, GUILayout.Width(120));
-        shoulderSwingY = EditorGUILayout.Vector2Field("扭转(Y)", shoulderSwingY, GUILayout.Width(120));
-        shoulderSwingZ = EditorGUILayout.Vector2Field("左右(Z)", shoulderSwingZ, GUILayout.Width(120));
+        shoulderTwist = EditorGUILayout.Vector2Field("前后(X)", shoulderTwist, GUILayout.Width(200));
+        shoulderSwingY = EditorGUILayout.Vector2Field("扭转(Y)", shoulderSwingY, GUILayout.Width(200));
+        shoulderSwingZ = EditorGUILayout.Vector2Field("左右(Z)", shoulderSwingZ, GUILayout.Width(200));
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.Space(4);
@@ -200,24 +245,21 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         EditorGUILayout.LabelField("配置管理", EditorStyles.boldLabel);
         EditorGUILayout.BeginHorizontal();
 
-        if (GUILayout.Button("保存配置", GUILayout.Height(30), GUILayout.Width(100)))
+        if (GUILayout.Button("保存配置", GUILayout.Height(40), GUILayout.Width(150)))
         {
             SaveConfig();
         }
 
-        if (GUILayout.Button("读取配置", GUILayout.Height(30), GUILayout.Width(100)))
+        if (GUILayout.Button("读取配置", GUILayout.Height(40), GUILayout.Width(150)))
         {
             LoadConfig();
         }
 
-        if (GUILayout.Button("恢复默认", GUILayout.Height(30), GUILayout.Width(100)))
+        if (GUILayout.Button("恢复默认", GUILayout.Height(40), GUILayout.Width(150)))
         {
             ResetToDefault();
         }
 
-        // 生成机器人按钮放最右边
-        GUILayout.FlexibleSpace();
-        GUI.enabled = true;
         if (GUILayout.Button("生成机器人", GUILayout.Height(40), GUILayout.Width(150)))
         {
             Generate();
@@ -309,18 +351,29 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         float lowerArmMass = MassByVol(lowerArmVol);
 
         var existingRoot = GameObject.Find(RobotRootName);
+        GameObject root;
         if (existingRoot != null)
         {
             if (!replaceExisting) return;
-            if (!Application.isPlaying)
-                Undo.DestroyObjectImmediate(existingRoot);
-            else
-                Destroy(existingRoot);
+            // 只删除子对象,保留根节点及其上的脚本和参数
+            root = existingRoot;
+            root.transform.position = spawnPosition;
+            // 获取所有子对象
+            int childCount = root.transform.childCount;
+            for (int i = childCount - 1; i >= 0; i--)
+            {
+                Transform child = root.transform.GetChild(i);
+                if (!Application.isPlaying)
+                    Undo.DestroyObjectImmediate(child.gameObject);
+                else
+                    Destroy(child.gameObject);
+            }
         }
-
-        GameObject root = new GameObject(RobotRootName);
-        root.transform.position = spawnPosition;
-
+        else
+        {
+            root = new GameObject(RobotRootName);
+            root.transform.position = spawnPosition;
+        }
         // 根节点（从地面开始，方便观察）
         // 地面(Feet) y=0, hipLevel=legLength
         float pelvisJointY = legLength + pelvisHeight * 0.5f + footSize.y; // 骨盆关节位置
@@ -363,7 +416,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             configureDrive: true,
             angularDamping: angularDamping,
             jointFriction: jointFriction,
-            driveStiffness: 0f,
+            driveStiffness: torsoJointStiffness * globalStiffnessScale,
             driveForceLimit: passiveJointForceLimit,
             lowerLimitRad: 0f,
             upperLimitRad: 0f,
@@ -390,7 +443,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             configureDrive: true,
             angularDamping: angularDamping,
             jointFriction: jointFriction,
-            driveStiffness: 0f,
+            driveStiffness: neckJointStiffness * globalStiffnessScale,
             driveForceLimit: passiveJointForceLimit,
             lowerLimitRad: 0f,
             upperLimitRad: 0f,
@@ -438,24 +491,28 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         CreateLeg(pelvis.transform, "Left", -legOffsetX, upperLegVisualSize, lowerLegVisualSize, footSize,
             upperLegLength, lowerLegLength, upperLegMass, lowerLegMass, footMass,
             hipJointLocalYInPelvis, kneeJointLocalYInPelvis, ankleJointLocalYInPelvis,
-            angularDamping, jointFriction, passiveJointForceLimit,
+            angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
+            hipJointStiffness, kneeJointStiffness, ankleJointStiffness,
             hipTwist, hipSwingY, hipSwingZ, kneeTwist, ankleTwist, ankleSwingY, ankleSwingZ);
         CreateLeg(pelvis.transform, "Right", legOffsetX, upperLegVisualSize, lowerLegVisualSize, footSize,
             upperLegLength, lowerLegLength, upperLegMass, lowerLegMass, footMass,
             hipJointLocalYInPelvis, kneeJointLocalYInPelvis, ankleJointLocalYInPelvis,
-            angularDamping, jointFriction, passiveJointForceLimit,
+            angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
+            hipJointStiffness, kneeJointStiffness, ankleJointStiffness,
             hipTwist, hipSwingY, hipSwingZ, kneeTwist, ankleTwist, ankleSwingY, ankleSwingZ);
 
         // 双臂：T-pose 手臂平伸（沿 X 轴向两侧）
         CreateArm(torso.transform, "Left", -shoulderOffsetX, upperArmVisualSize, lowerArmVisualSize,
             upperArmLength, lowerArmLength, upperArmMass, lowerArmMass,
             shoulderAttachLocalY,
-            angularDamping, jointFriction, passiveJointForceLimit,
+            angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
+            shoulderJointStiffness, elbowJointStiffness,
             shoulderTwist, shoulderSwingY, shoulderSwingZ, elbowTwist);
         CreateArm(torso.transform, "Right", shoulderOffsetX, upperArmVisualSize, lowerArmVisualSize,
             upperArmLength, lowerArmLength, upperArmMass, lowerArmMass,
             shoulderAttachLocalY,
-            angularDamping, jointFriction, passiveJointForceLimit,
+            angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
+            shoulderJointStiffness, elbowJointStiffness,
             shoulderTwist, shoulderSwingY, shoulderSwingZ, elbowTwist);
 
         // 让编辑器知道场景有变化
@@ -480,6 +537,10 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         float angularDamping,
         float jointFriction,
         float driveForceLimit,
+        float globalScale,
+        float hipStiffness,
+        float kneeStiffness,
+        float ankleStiffness,
         Vector2 hipTwist,
         Vector2 hipSwingY,
         Vector2 hipSwingZ,
@@ -502,7 +563,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             configureDrive: true,
             angularDamping: angularDamping,
             jointFriction: jointFriction,
-            driveStiffness: 0f,
+            driveStiffness: hipStiffness * globalScale,
             driveForceLimit: driveForceLimit,
             lowerLimitRad: 0f,
             upperLimitRad: 0f,
@@ -529,7 +590,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             configureDrive: true,
             angularDamping: angularDamping,
             jointFriction: jointFriction,
-            driveStiffness: 0f,
+            driveStiffness: kneeStiffness * globalScale,
             driveForceLimit: driveForceLimit,
             lowerLimitRad: kneeTwist.x,
             upperLimitRad: kneeTwist.y
@@ -552,7 +613,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             configureDrive: true,
             angularDamping: angularDamping,
             jointFriction: jointFriction,
-            driveStiffness: 0f,
+            driveStiffness: ankleStiffness * globalScale,
             driveForceLimit: driveForceLimit,
             lowerLimitRad: 0f,
             upperLimitRad: 0f,
@@ -580,6 +641,9 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         float angularDamping,
         float jointFriction,
         float driveForceLimit,
+        float globalScale,
+        float shoulderStiffness,
+        float elbowStiffness,
         Vector2 shoulderTwist,
         Vector2 shoulderSwingY,
         Vector2 shoulderSwingZ,
@@ -605,7 +669,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             configureDrive: true,
             angularDamping: angularDamping,
             jointFriction: jointFriction,
-            driveStiffness: 0f,
+            driveStiffness: shoulderStiffness * globalScale,
             driveForceLimit: driveForceLimit,
             lowerLimitRad: 0f,
             upperLimitRad: 0f,
@@ -633,7 +697,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             configureDrive: true,
             angularDamping: angularDamping,
             jointFriction: jointFriction,
-            driveStiffness: 0f,
+            driveStiffness: elbowStiffness * globalScale,
             driveForceLimit: driveForceLimit,
             lowerLimitRad: elbowTwist.x,
             upperLimitRad: elbowTwist.y
@@ -874,6 +938,16 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         jointFriction = 0.5f;
         passiveJointForceLimit = 1e6f;
 
+        // 关节刚度参数
+        globalStiffnessScale = 1.0f;
+        hipJointStiffness = 30000f;
+        kneeJointStiffness = 20000f;
+        ankleJointStiffness = 5000f;
+        shoulderJointStiffness = 10000f;
+        elbowJointStiffness = 5000f;
+        torsoJointStiffness = 10000f;
+        neckJointStiffness = 3000f;
+
         // 关节旋转限制 - 臀部
         pelvisSwingY = new Vector2(-45f, 45f);
         pelvisSwingZ = new Vector2(-45f, 45f);
@@ -962,6 +1036,16 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         public float jointFriction = 0.5f;
         public float passiveJointForceLimit = 1e6f;
 
+        // 关节刚度参数
+        public float globalStiffnessScale = 1.0f;
+        public float hipJointStiffness = 30000f;
+        public float kneeJointStiffness = 20000f;
+        public float ankleJointStiffness = 5000f;
+        public float shoulderJointStiffness = 10000f;
+        public float elbowJointStiffness = 5000f;
+        public float torsoJointStiffness = 10000f;
+        public float neckJointStiffness = 3000f;
+
         // 关节旋转限制 - 臀部
         public float pelvisSwingY_x = -45f;
         public float pelvisSwingY_y = 45f;
@@ -1046,6 +1130,16 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         jointFriction = config.jointFriction;
         passiveJointForceLimit = config.passiveJointForceLimit;
 
+        // 关节刚度参数
+        globalStiffnessScale = config.globalStiffnessScale;
+        hipJointStiffness = config.hipJointStiffness;
+        kneeJointStiffness = config.kneeJointStiffness;
+        ankleJointStiffness = config.ankleJointStiffness;
+        shoulderJointStiffness = config.shoulderJointStiffness;
+        elbowJointStiffness = config.elbowJointStiffness;
+        torsoJointStiffness = config.torsoJointStiffness;
+        neckJointStiffness = config.neckJointStiffness;
+
         // 关节旋转限制 - 臀部
         pelvisSwingY = new Vector2(config.pelvisSwingY_x, config.pelvisSwingY_y);
         pelvisSwingZ = new Vector2(config.pelvisSwingZ_x, config.pelvisSwingZ_y);
@@ -1111,6 +1205,16 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             angularDamping = angularDamping,
             jointFriction = jointFriction,
             passiveJointForceLimit = passiveJointForceLimit,
+
+            // 关节刚度参数
+            globalStiffnessScale = globalStiffnessScale,
+            hipJointStiffness = hipJointStiffness,
+            kneeJointStiffness = kneeJointStiffness,
+            ankleJointStiffness = ankleJointStiffness,
+            shoulderJointStiffness = shoulderJointStiffness,
+            elbowJointStiffness = elbowJointStiffness,
+            torsoJointStiffness = torsoJointStiffness,
+            neckJointStiffness = neckJointStiffness,
 
             // 关节旋转限制 - 臀部
             pelvisSwingY_x = pelvisSwingY.x,

@@ -83,6 +83,8 @@ python -m pip install --upgrade pip
 
 ```bash
 pip install mlagents==1.1.0
+
+pip install mlagents==1.1.0 -i https://pypi.tuna.tsinghua.edu.cn/simple ### 国内镜像
 ```
 
 此命令会自动安装所有依赖包。

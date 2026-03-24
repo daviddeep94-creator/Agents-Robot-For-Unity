@@ -626,7 +626,11 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         );
 
         // 在踝关节节点下添加脚板视觉/碰撞实体
-        CreateVisualCollider(ankleJoint.transform, side + "_Foot_Visual", footSize, new Vector3(0, -footSize.y * 0.5f, footSize.z * 0.3f));
+        GameObject go = CreateVisualCollider(ankleJoint.transform, side + "_Foot_Visual", footSize, new Vector3(0, -footSize.y * 0.5f, footSize.z * 0.3f));
+        if(go.TryGetComponent(out Collider collider) && !go.TryGetComponent(out Foot foot))
+        {
+            go.AddComponent<Foot>();
+        }
     }
 
     private static void CreateArm(
@@ -843,7 +847,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
     /// 实体可以有任意缩放，不影响关节节点的物理计算
     /// 注意：移除 ArticulationBody 是因为物理质量由关节节点控制，避免重复计算
     /// </summary>
-    private static void CreateVisualCollider(
+    private static GameObject CreateVisualCollider(
         Transform parent,
         string name,
         Vector3 size,
@@ -863,6 +867,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         // 实体不需要 ArticulationBody，只需要 Collider
         var articulation = go.GetComponent<ArticulationBody>();
         DestroyImmediate(articulation);
+        return go;
     }
 
     /// <summary>

@@ -1,31 +1,19 @@
 using UnityEngine;
-using UnityEditor;
 using Unity.MLAgents;
 
 /// <summary>
 /// 训练管理器
-/// 用于管理训练场景、参数配置和训练流程
+/// 用于管理训练场景、参数配置和训练统计
 /// </summary>
 public class TrainingManager : MonoBehaviour
 {
-    [Header("训练模式")]
-    [Tooltip("当前训练阶段")]
-    [SerializeField] private TrainingStage currentStage = TrainingStage.Balance;
+    [Header("时间设置")]
+    [Tooltip("时间流逝速度，默认20（训练时加速）")]
+    [Range(1f, 100f)]
+    [SerializeField] private float timeScale = 20f;
 
-    [Header("平衡训练配置")]
-    [SerializeField] private RobotBalanceAgent balanceAgent;
-    [SerializeField] private int balanceMaxEpisodes = 10000;
-    [SerializeField] private float balanceTargetReward = 50f;
-
-    [Header("移动训练配置")]
-    [SerializeField] private RobotMovementAgent movementAgent;
-    [SerializeField] private int movementMaxEpisodes = 20000;
-    [SerializeField] private float movementTargetReward = 100f;
-
-    [Header("训练参数")]
-    [SerializeField] private float maxEpisodeTime = 30f;
-    [SerializeField] private bool autoAdvanceStage = true;
-    [SerializeField] private bool showTrainingUI = true;
+    [Tooltip("是否在训练开始时自动设置时间速度")]
+    [SerializeField] private bool autoSetTimeScale = true;
 
     [Header("训练统计")]
     [SerializeField, ReadOnly] private int currentEpisode;
@@ -38,14 +26,14 @@ public class TrainingManager : MonoBehaviour
     private System.Collections.Generic.List<float> rewardHistory = new System.Collections.Generic.List<float>();
     private float episodeStartTime;
 
-    public enum TrainingStage
-    {
-        Balance,      // 阶段1：站立平衡
-        Movement      // 阶段2：向目标移动
-    }
-
     private void Start()
     {
+        if (autoSetTimeScale)
+        {
+            Time.timeScale = timeScale;
+            Debug.Log($"[TrainingManager] 时间速度设置为 {timeScale}x");
+        }
+
         // 延迟一帧初始化，确保所有 Agent 的 Start() 已执行
         Invoke(nameof(InitializeTraining), 0.1f);
     }
@@ -55,30 +43,8 @@ public class TrainingManager : MonoBehaviour
     /// </summary>
     private void InitializeTraining()
     {
-        // 查找Agent（如果没有手动指定）
-        if (balanceAgent == null)
-        {
-            balanceAgent = FindObjectOfType<RobotBalanceAgent>();
-        }
-        if (movementAgent == null)
-        {
-            movementAgent = FindObjectOfType<RobotMovementAgent>();
-        }
-
-        // 设置最大步数
-        if (balanceAgent != null)
-        {
-            balanceAgent.MaxStep = Mathf.RoundToInt(maxEpisodeTime / Time.fixedDeltaTime);
-        }
-        if (movementAgent != null)
-        {
-            movementAgent.MaxStep = Mathf.RoundToInt(maxEpisodeTime / Time.fixedDeltaTime);
-        }
-
-        // 激活当前阶段的Agent
-        SetActiveAgent(currentStage);
-
-        Debug.Log($"TrainingManager: 训练初始化完成，当前阶段: {currentStage}");
+        // 这里可以添加初始化逻辑，如加载配置等
+        Debug.Log("[TrainingManager] 训练管理器已初始化");
     }
 
     private void Update()
@@ -104,9 +70,6 @@ public class TrainingManager : MonoBehaviour
 
         // 清空当前Episode奖励
         totalReward = 0f;
-
-        // 检查是否应该进入下一阶段
-        CheckStageProgression();
     }
 
     /// <summary>
@@ -140,144 +103,34 @@ public class TrainingManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 检查阶段进度
+    /// 手动设置时间速度（运行时调用）
     /// </summary>
-    private void CheckStageProgression()
+    public void SetTimeScale(float scale)
     {
-        if (!autoAdvanceStage) return;
-
-        switch (currentStage)
-        {
-            case TrainingStage.Balance:
-                // 平衡训练达标：达到目标奖励或训练完成足够多episode
-                if (averageReward >= balanceTargetReward || currentEpisode >= balanceMaxEpisodes)
-                {
-                    AdvanceToStage(TrainingStage.Movement);
-                }
-                break;
-
-            case TrainingStage.Movement:
-                // 移动训练达标
-                if (averageReward >= movementTargetReward || currentEpisode >= movementMaxEpisodes)
-                {
-                    Debug.Log("TrainingManager: 所有训练阶段完成！");
-                }
-                break;
-        }
+        Time.timeScale = Mathf.Clamp(scale, 1f, 100f);
+        timeScale = Time.timeScale;
+        Debug.Log($"[TrainingManager] 时间速度手动设置为 {Time.timeScale:F1}x");
     }
 
     /// <summary>
-    /// 进入下一训练阶段
+    /// 暂停/恢复训练
     /// </summary>
-    public void AdvanceToStage(TrainingStage newStage)
+    public void TogglePause()
     {
-        Debug.Log($"TrainingManager: 从阶段 {currentStage} 进入阶段 {newStage}");
-
-        currentStage = newStage;
-        SetActiveAgent(newStage);
-
-        // 重置统计
-        currentEpisode = 0;
-        rewardHistory.Clear();
-        bestReward = 0f;
-        averageReward = 0f;
-    }
-
-    /// <summary>
-    /// 设置活跃的Agent
-    /// </summary>
-    private void SetActiveAgent(TrainingStage stage)
-    {
-        if (balanceAgent != null)
-        {
-            balanceAgent.enabled = (stage == TrainingStage.Balance);
-        }
-
-        if (movementAgent != null)
-        {
-            movementAgent.enabled = (stage == TrainingStage.Movement);
-        }
-    }
-
-    /// <summary>
-    /// 保存训练数据
-    /// </summary>
-    public void SaveTrainingData()
-    {
-        string path = $"TrainingData_{System.DateTime.Now:yyyyMMdd_HHmmss}.json";
-        string json = JsonUtility.ToJson(new TrainingData
-        {
-            stage = currentStage.ToString(),
-            currentEpisode = currentEpisode,
-            totalReward = totalReward,
-            averageReward = averageReward,
-            bestReward = bestReward,
-            rewardHistory = rewardHistory.ToArray()
-        }, true);
-
-        System.IO.File.WriteAllText(path, json);
-        Debug.Log($"TrainingManager: 训练数据已保存到 {path}");
-    }
-
-    [System.Serializable]
-    private class TrainingData
-    {
-        public string stage;
-        public int currentEpisode;
-        public float totalReward;
-        public float averageReward;
-        public float bestReward;
-        public float[] rewardHistory;
-    }
-
-    /// <summary>
-    /// 手动切换训练阶段
-    /// </summary>
-    public void SwitchToBalanceStage()
-    {
-        AdvanceToStage(TrainingStage.Balance);
-    }
-
-    /// <summary>
-    /// 手动切换训练阶段
-    /// </summary>
-    public void SwitchToMovementStage()
-    {
-        AdvanceToStage(TrainingStage.Movement);
-    }
-
-    /// <summary>
-    /// 重置训练
-    /// </summary>
-    public void ResetTraining()
-    {
-        currentEpisode = 0;
-        rewardHistory.Clear();
-        bestReward = 0f;
-        averageReward = 0f;
-        totalReward = 0f;
-
-        if (balanceAgent != null) balanceAgent.EndEpisode();
-        if (movementAgent != null) movementAgent.EndEpisode();
-
-        Debug.Log("TrainingManager: 训练已重置");
+        Time.timeScale = Time.timeScale == 0f ? timeScale : 0f;
+        Debug.Log($"[TrainingManager] 训练{(Time.timeScale == 0f ? "暂停" : "恢复")}");
     }
 
     private void OnGUI()
     {
-        if (!showTrainingUI) return;
-
         GUILayout.BeginArea(new Rect(10, 10, 300, 450));
         GUILayout.BeginVertical("box");
 
-        GUILayout.Label("训练管理器", EditorStyles.boldLabel);
-
-        // 当前阶段
-        GUILayout.Label($"阶段: {currentStage}");
+        GUILayout.Label("训练管理器", new GUIStyle(GUI.skin.label) { fontStyle = FontStyle.Bold });
 
         // 统计信息
         GUILayout.Space(10);
-        GUILayout.Label("训练统计", EditorStyles.boldLabel);
+        GUILayout.Label("训练统计", new GUIStyle(GUI.skin.label) { fontStyle = FontStyle.Bold });
         GUILayout.Label($"Episode: {currentEpisode}");
         GUILayout.Label($"当前奖励: {totalReward:F2}");
         GUILayout.Label($"平均奖励: {averageReward:F2}");
@@ -285,28 +138,33 @@ public class TrainingManager : MonoBehaviour
         GUILayout.Label($"Episode时间: {episodeTime:F1}s");
         GUILayout.Label($"时间速度: {Time.timeScale:F1}x");
 
-        // 阶段控制
+        // 控制按钮
         GUILayout.Space(10);
-        GUILayout.Label("阶段控制", EditorStyles.boldLabel);
-        if (GUILayout.Button("平衡训练"))
+        GUILayout.Label("控制", new GUIStyle(GUI.skin.label) { fontStyle = FontStyle.Bold });
+
+        if (GUILayout.Button("暂停/恢复"))
         {
-            SwitchToBalanceStage();
-        }
-        if (GUILayout.Button("移动训练"))
-        {
-            SwitchToMovementStage();
+            TogglePause();
         }
 
-        // 训练控制
-        GUILayout.Space(10);
-        GUILayout.Label("训练控制", EditorStyles.boldLabel);
-        if (GUILayout.Button("重置训练"))
+        if (GUILayout.Button("设置时间速度: 1x"))
         {
-            ResetTraining();
+            SetTimeScale(1f);
         }
-        if (GUILayout.Button("保存数据"))
+
+        if (GUILayout.Button("设置时间速度: 10x"))
         {
-            SaveTrainingData();
+            SetTimeScale(10f);
+        }
+
+        if (GUILayout.Button("设置时间速度: 20x"))
+        {
+            SetTimeScale(20f);
+        }
+
+        if (GUILayout.Button("设置时间速度: 50x"))
+        {
+            SetTimeScale(50f);
         }
 
         GUILayout.EndVertical();
@@ -331,3 +189,4 @@ public class ReadOnlyDrawer : UnityEditor.PropertyDrawer
     }
 }
 #endif
+

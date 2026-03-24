@@ -499,7 +499,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             hipJointLocalYInPelvis, kneeJointLocalYInPelvis, ankleJointLocalYInPelvis,
             angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
             hipJointStiffness, kneeJointStiffness, ankleJointStiffness,
-            hipTwist, hipSwingY, hipSwingZ, kneeTwist, ankleTwist, ankleSwingY, ankleSwingZ);
+            hipTwist, Reverse(hipSwingY), Reverse(hipSwingZ), kneeTwist, ankleTwist, Reverse(ankleSwingY), Reverse(ankleSwingZ));
 
         // 双臂：T-pose 手臂平伸（沿 X 轴向两侧）
         CreateArm(torso.transform, "Left", -shoulderOffsetX, upperArmVisualSize, lowerArmVisualSize,
@@ -508,17 +508,19 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
             shoulderJointStiffness, elbowJointStiffness,
             shoulderTwist, shoulderSwingY, shoulderSwingZ, elbowTwist);
+
         CreateArm(torso.transform, "Right", shoulderOffsetX, upperArmVisualSize, lowerArmVisualSize,
             upperArmLength, lowerArmLength, upperArmMass, lowerArmMass,
             shoulderAttachLocalY,
             angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
             shoulderJointStiffness, elbowJointStiffness,
-            shoulderTwist, shoulderSwingY, shoulderSwingZ, elbowTwist);
+            shoulderTwist, Reverse(shoulderSwingY), Reverse(shoulderSwingZ), elbowTwist);
 
         // 让编辑器知道场景有变化
         EditorUtility.SetDirty(root);
     }
 
+    private static Vector2 Reverse(Vector2 v) => new Vector2(-v.y, -v.x); // 反转旋转限制（适用于左右对称的关节）
     private static void CreateLeg(
         Transform pelvis,
         string side,

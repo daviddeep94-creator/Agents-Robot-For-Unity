@@ -13,9 +13,6 @@ public class RobotBalanceAgent : Agent
     [Tooltip("机器人根节点ArticulationBody")]
     [SerializeField] private ArticulationBody robotRoot;
 
-    [Tooltip("控制力放大")]
-    [SerializeField] private float force = 50f;
-
     [Header("训练目标")]
     [Tooltip("目标站立时间（秒），达到后给予奖励")]
     [SerializeField] private float targetStandTime = 10f;
@@ -41,10 +38,6 @@ public class RobotBalanceAgent : Agent
 
     [Tooltip("最终完成奖励")]
     [SerializeField] private float completionReward = 1f;
-
-    [Header("动作配置")]
-    [Tooltip("关节动作幅度")]
-    [SerializeField] private float jointForceScale = 100f;
 
     [Header("调试")]
     [SerializeField] private bool showDebugInfo = true;
@@ -99,6 +92,14 @@ public class RobotBalanceAgent : Agent
         {
             this.enabled = true;
             Debug.LogWarning("[RobotBalanceAgent] 组件被禁用，已自动启用");
+        }
+        if(robotRoot == null)
+        {
+            robotRoot = GetComponentInChildren<ArticulationBody>();
+            if (robotRoot != null)
+            {
+                Debug.Log("[RobotBalanceAgent] 自动找到 robotRoot");
+            }
         }
     }
 
@@ -318,40 +319,36 @@ public class RobotBalanceAgent : Agent
 
         Debug.Log($"[RobotBalanceAgent] CollectObservations 被调用 - Step={StepCount}");
 
-        // 1. 机器人位置（归一化）
-        sensor.AddObservation(robotRoot.transform.position.y / targetHeight);
+        int dimensionality = 0;
 
-        // 2. 机器人旋转（欧拉角，归一化到-1到1）
-        Vector3 euler = robotRoot.transform.rotation.eulerAngles;
-        sensor.AddObservation(NormalizeAngle(euler.x));
-        sensor.AddObservation(NormalizeAngle(euler.y));
-        sensor.AddObservation(NormalizeAngle(euler.z));
+        // 1. 机器人根节点世界位置
+        sensor.AddObservation(robotRoot.transform.position);
+        dimensionality += 3;
 
-        // 3. 机器人速度和角速度（归一化）
-        sensor.AddObservation(Mathf.Clamp(robotRoot.velocity.y / 2f, -1f, 1f));
-        sensor.AddObservation(Mathf.Clamp(robotRoot.angularVelocity.x / 5f, -1f, 1f));
-        sensor.AddObservation(Mathf.Clamp(robotRoot.angularVelocity.y / 5f, -1f, 1f));
-        sensor.AddObservation(Mathf.Clamp(robotRoot.angularVelocity.z / 5f, -1f, 1f));
+        // 2. 机器人根节点世界旋转
+        sensor.AddObservation(robotRoot.transform.rotation.eulerAngles);
+        dimensionality += 3;
+        // 3. 机器人根节点速度
+        sensor.AddObservation(robotRoot.velocity);
+        dimensionality += 3;
+        // 4. 机器人根节点角速度
+        sensor.AddObservation(robotRoot.angularVelocity);
+        dimensionality += 3;
 
-        // 4. 各关节角度（归一化）
-        float[] jointAngles = GetJointAngles();
-        foreach (float angle in jointAngles)
+        // 5. 各关节局部旋转 角速度
+        foreach (var joint in allJoints)
         {
-            sensor.AddObservation(NormalizeAngle(angle));
+            if (joint == robotRoot) continue;
+            if (joint != null && joint.jointType != ArticulationJointType.FixedJoint)
+            {
+                sensor.AddObservation(joint.transform.localRotation.eulerAngles);
+                sensor.AddObservation(joint.angularVelocity);
+                dimensionality += 6;
+            }
         }
 
-        // 5. 各关节速度（归一化）
-        float[] jointVelocities = GetJointVelocities();
-        foreach (float velocity in jointVelocities)
-        {
-            sensor.AddObservation(Mathf.Clamp(velocity / 5f, -1f, 1f));
-        }
-
-        // 6. 重力方向（相对机器人）
-        Vector3 localGravity = robotRoot.transform.InverseTransformDirection(Physics.gravity);
-        sensor.AddObservation(localGravity.normalized);
-
-        // 总观测维度: 1 + 3 + 1 + 3 + 12 + 12 + 3 = 35
+        Debug.Log($"总维度:{dimensionality}");
+        // 总观测维度: 1(位置) + 3(世界旋转) + 4(世界速度) + 12*3(关节局部旋转) + 12*3(关节局部角速度) = 77
     }
 
     /// <summary>
@@ -516,10 +513,12 @@ public class RobotBalanceAgent : Agent
         {
             ApplyForceToJoint(allJoints[rightElbowIndex], actions[index++], 0, 0);
         }
+
+        //一共26轴
     }
 
     /// <summary>
-    /// 应用力矩到单个关节
+    /// 应用力矩到单个关节（直接使用AI输出作为角度目标值）
     /// </summary>
     private void ApplyForceToJoint(ArticulationBody joint, float xForce, float yForce, float zForce)
     {
@@ -528,30 +527,21 @@ public class RobotBalanceAgent : Agent
         int index = System.Array.IndexOf(allJoints, joint);
         if (index < 0) return;
 
-        xForce *= force;
-        yForce *= force;
-        zForce *= force;
-
         // 获取当前 drive 目标
         var xDrive = joint.xDrive;
         var yDrive = joint.yDrive;
         var zDrive = joint.zDrive;
 
-        // 计算相对于基线的增量
-        float deltaX = xDrive.target - baselineJointXTargets[index];
-        float deltaY = yDrive.target - baselineJointYTargets[index];
-        float deltaZ = zDrive.target - baselineJointZTargets[index];
-
-        // 应用新的力矩（基于基线）
-        xDrive.target = baselineJointXTargets[index] + deltaX + xForce * jointForceScale * Time.fixedDeltaTime;
+        // 直接使用AI输出作为角度目标值，映射到关节角度范围内
+        xDrive.target = Mathf.LerpAngle(xDrive.lowerLimit, xDrive.upperLimit, xForce);
         joint.xDrive = xDrive;
 
         if (joint.jointType == ArticulationJointType.SphericalJoint)
         {
-            yDrive.target = baselineJointYTargets[index] + deltaY + yForce * jointForceScale * Time.fixedDeltaTime;
+            yDrive.target = Mathf.LerpAngle(yDrive.lowerLimit, yDrive.upperLimit, yForce);
             joint.yDrive = yDrive;
 
-            zDrive.target = baselineJointZTargets[index] + deltaZ + zForce * jointForceScale * Time.fixedDeltaTime;
+            zDrive.target = Mathf.LerpAngle(zDrive.lowerLimit, zDrive.upperLimit, zForce);
             joint.zDrive = zDrive;
         }
     }

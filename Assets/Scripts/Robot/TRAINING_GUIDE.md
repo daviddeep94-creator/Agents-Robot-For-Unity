@@ -90,6 +90,14 @@ mlagents-learn "F:\GameProject\AI Robot\Assets\ML-Agents\training_config.yaml" `
 --run-id=RobotBalanceAgent `
 --results-dir="F:\GameProject\AI Robot\Assets\ML-Agents\MLModels" 
 
+mlagents-learn "E:\Agents-Robot-For-Unity\Assets\ML-Agents\training_config.yaml" `
+--run-id=RobotBalanceAgent `
+--results-dir="E:\Agents-Robot-For-Unity\Assets\ML-Agents\MLModels"
+
+# 方法2：使用相对路径
+C:\Users\Administrator\AppData\Local\Programs\Python\Python310\python.exe -m mlagents-learn "Assets\ML-Agents\training_config.yaml" `
+--run-id=RobotBalanceAgent `
+--results-dir="Assets\ML-Agents\MLModels" 
 
 # 训练完成后查看结果
 tensorboard --logdir=results

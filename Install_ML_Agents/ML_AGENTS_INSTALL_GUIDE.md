@@ -82,12 +82,18 @@ python -m pip install --upgrade pip
 ### 3. 安装 ML-Agents
 
 ```bash
-pip install mlagents==1.1.0
+pip install mlagents==1.1.0 -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-pip install mlagents==1.1.0 -i https://pypi.tuna.tsinghua.edu.cn/simple ### 国内镜像
+# 修复版本冲突（必须按此顺序执行）
+pip install --force-reinstall numpy==1.23.5 onnx==1.17.0 protobuf==3.20.3 -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip install onnxscript -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
-此命令会自动安装所有依赖包。
+**版本说明**：
+- mlagents 1.1.0：官方要求 onnx==1.15.0，但为兼容 onnxscript 使用 1.17.0
+- numpy 1.23.5：mlagents 要求 <1.24.0,>=1.23.5
+- protobuf 3.20.3：mlagents 要求 <3.21,>=3.6
+- onnxscript：模型导出必需，要求 onnx>=1.17
 
 ### 4. 验证安装
 

@@ -892,9 +892,9 @@ MonoBehaviour:
   jointMovementPenalty: 0.001
   completionReward: 1
   showDebugInfo: 1
-  target: {fileID: 1819179792}
+  target: {fileID: 0}
   targetType: 1
-  failDelayTime: 5
+  failDelayTime: 2
 --- !u!114 &504704204
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3394,11 +3394,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1149667804}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f72ba4483f896cd4eac64aeb37b2e548, type: 3}
+  m_Script: {fileID: 11500000, guid: 3c6a600eb55c98c4e84087473f5b1a41, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  balanceAgent: {fileID: 0}
-  left: 0
 --- !u!23 &1149667807
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -4347,11 +4345,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1534933209}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f72ba4483f896cd4eac64aeb37b2e548, type: 3}
+  m_Script: {fileID: 11500000, guid: 3c6a600eb55c98c4e84087473f5b1a41, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  balanceAgent: {fileID: 0}
-  left: 0
 --- !u!23 &1534933212
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -4445,16 +4441,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 12345678901234567890123456789014, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  currentStage: 0
-  balanceAgent: {fileID: 504704203}
-  balanceMaxEpisodes: 10000
-  balanceTargetReward: 50
-  movementAgent: {fileID: 0}
-  movementMaxEpisodes: 20000
-  movementTargetReward: 100
-  maxEpisodeTime: 30
-  autoAdvanceStage: 1
-  showTrainingUI: 1
+  timeScale: 20
+  autoSetTimeScale: 1
   currentEpisode: 0
   totalReward: 0
   averageReward: 0

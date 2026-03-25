@@ -88,17 +88,25 @@ gamma: 0.995
 # 方法1：使用双引号包裹完整路径
 mlagents-learn "F:\GameProject\AI Robot\Assets\ML-Agents\training_config.yaml" `
 --run-id=RobotBalanceAgent `
---results-dir="F:\GameProject\AI Robot\Assets\ML-Agents\MLModels" 
+--results-dir="F:\GameProject\AI Robot\MLModels" 
 
 mlagents-learn "E:\Agents-Robot-For-Unity\Assets\ML-Agents\training_config.yaml" `
 --run-id=RobotBalanceAgent `
---results-dir="E:\Agents-Robot-For-Unity\Assets\ML-Agents\MLModels"
+--results-dir="E:\Agents-Robot-For-Unity\MLModels"
 
 # 方法2：使用相对路径
 C:\Users\Administrator\AppData\Local\Programs\Python\Python310\python.exe -m mlagents-learn "Assets\ML-Agents\training_config.yaml" `
 --run-id=RobotBalanceAgent `
 --results-dir="Assets\ML-Agents\MLModels" 
 
+# 方法3：使用打包后的exe训练
+mlagents-learn "E:\Agents-Robot-For-Unity\Assets\ML-Agents\training_config.yaml" `
+--run-id=RobotBalanceAgent `
+--env="E:\Agents-Robot-For-Unity\Build\AI Robot.exe" `
+--results-dir="E:\Agents-Robot-For-Unity\Assets\ML-Agents\MLModels" `
+--time-scale=20 `
+--num-envs=15 `
+--resume 
 # 训练完成后查看结果
 tensorboard --logdir=results
 ```

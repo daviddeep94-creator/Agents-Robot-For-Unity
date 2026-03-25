@@ -139,13 +139,14 @@ mlagents-learn "F:\GameProject\AI Robot\Assets\ML-Agents\training_config.yaml" `
 
 | 参数 | 说明 |
 |------|------|
-| `--run-id` | 训练任务名称 (必需) |
-| `--results-dir` | 结果保存目录 |
+| `--run-id=` | 训练任务名称 (必需) |
+| `--results-dir=` | 结果保存目录 |
 | `--force` | 覆盖同名训练 |
 | `--resume` | 继续之前的训练 |
 | `--initialize-from` | 从已有的训练加载 |
-| `--num-envs` | 并行环境数量 |
-
+| `--num-envs=` | 并行环境数量 |
+| `--env=` | 指定打包后的exe路径 |
+| `--no-graphics` | 不显示训练画面 |
 ---
 
 ## 查看训练曲线

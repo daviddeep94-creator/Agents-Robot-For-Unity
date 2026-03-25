@@ -85,8 +85,11 @@ python -m pip install --upgrade pip
 pip install mlagents==1.1.0 -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # 修复版本冲突（必须按此顺序执行）
-pip install --force-reinstall numpy==1.23.5 onnx==1.17.0 protobuf==3.20.3 -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip install --force-reinstall numpy==1.23.5 onnx==1.13.0 protobuf==3.20.3 -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install onnxscript -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+pip install torch==1.13.1 torchvision==0.14.1 --index-url https://download.pytorch.org/whl/cpu
+pip install onnxruntime==1.14.1
 ```
 
 **版本说明**：

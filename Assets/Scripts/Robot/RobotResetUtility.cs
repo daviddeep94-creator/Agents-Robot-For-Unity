@@ -16,9 +16,6 @@ public static class RobotResetUtility
     /// <param name="initialJointXTargets">保存的初始 X Drive 目标数组</param>
     /// <param name="initialJointYTargets">保存的初始 Y Drive 目标数组</param>
     /// <param name="initialJointZTargets">保存的初始 Z Drive 目标数组</param>
-    /// <param name="baselineJointXTargets">基线 X Drive 目标数组（输出参数）</param>
-    /// <param name="baselineJointYTargets">基线 Y Drive 目标数组（输出参数）</param>
-    /// <param name="baselineJointZTargets">基线 Z Drive 目标数组（输出参数）</param>
     /// <param name="logPrefix">日志前缀，用于区分调用来源</param>
     public static void ResetRobotPose(
         ArticulationBody robotRoot,
@@ -27,9 +24,6 @@ public static class RobotResetUtility
         float[] initialJointXTargets,
         float[] initialJointYTargets,
         float[] initialJointZTargets,
-        ref float[] baselineJointXTargets,
-        ref float[] baselineJointYTargets,
-        ref float[] baselineJointZTargets,
         string logPrefix = "[RobotResetUtility]")
     {
         Debug.Log($"{logPrefix} 开始重置机器人");
@@ -74,21 +68,6 @@ public static class RobotResetUtility
         for (int i = 0; i < allJoints.Length; i++)
         {
             allJoints[i].enabled = true;
-        }
-
-        // 更新基线目标
-        if (baselineJointXTargets == null || baselineJointXTargets.Length != initialJointXTargets.Length)
-        {
-            baselineJointXTargets = new float[initialJointXTargets.Length];
-            baselineJointYTargets = new float[initialJointYTargets.Length];
-            baselineJointZTargets = new float[initialJointZTargets.Length];
-        }
-
-        for (int i = 0; i < initialJointXTargets.Length; i++)
-        {
-            baselineJointXTargets[i] = initialJointXTargets[i];
-            baselineJointYTargets[i] = initialJointYTargets[i];
-            baselineJointZTargets[i] = initialJointZTargets[i];
         }
 
         Debug.Log($"{logPrefix} 重置完成");

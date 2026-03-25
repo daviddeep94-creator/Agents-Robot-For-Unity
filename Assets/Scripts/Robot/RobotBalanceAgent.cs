@@ -1,8 +1,9 @@
-using UnityEngine;
 using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
-using Unity.MLAgents.Sensors;
 using Unity.MLAgents.Policies;
+using Unity.MLAgents.Sensors;
+using Unity.VisualScripting;
+using UnityEngine;
 
 public enum TargetType
 {
@@ -23,27 +24,21 @@ public class RobotBalanceAgent : Agent
     [Tooltip("目标站立时间（秒），达到后给予奖励")]
     [SerializeField] private float targetStandTime = 10f;
 
-    [Tooltip("机器人重心目标高度（米）")]
-    [SerializeField] private float targetHeight = 1f;
+    [Tooltip("机器人重心高度误差")]
+    [SerializeField] private float targetHeightDiff = 0.25f;
 
     [Tooltip("最大允许的倾斜角度（度）")]
     [SerializeField] private float maxTiltAngle = 30f;
 
-    [Header("奖励配置")]
-    [Tooltip("每帧保持直立的基础奖励")]
-    [SerializeField] private float uprightReward = 0.01f;
+    //[Header("奖励配置")]
+    //[Tooltip("每帧保持直立的基础奖励")]
+    //[SerializeField] private float uprightReward = 0.01f;
 
-    [Tooltip("高度接近目标的奖励系数")]
-    [SerializeField] private float heightRewardMultiplier = 10f;
+    //[Tooltip("倾斜惩罚系数")]
+    //[SerializeField] private float tiltPenaltyMultiplier = 0.1f;
 
-    [Tooltip("倾斜惩罚系数")]
-    [SerializeField] private float tiltPenaltyMultiplier = 0.1f;
-
-    [Tooltip("关节移动惩罚系数（避免过度移动）")]
-    [SerializeField] private float jointMovementPenalty = 0.001f;
-
-    [Tooltip("最终完成奖励")]
-    [SerializeField] private float completionReward = 1f;
+    //[Tooltip("最终完成奖励")]
+    //[SerializeField] private float completionReward = 1f;
 
     [Header("调试")]
     [SerializeField] private bool showDebugInfo = true;
@@ -57,11 +52,8 @@ public class RobotBalanceAgent : Agent
     private float episodeTimer;
     private float currentHeight;
     private float currentTiltAngle;
-    private float previousHeight;
+
     private ArticulationBody[] allJoints;
-    private Vector3 startPosition;
-    private Quaternion startRotation;
-    private bool isGrounded;
 
     // 关节索引映射
     private int pelvisIndex, torsoIndex, neckIndex;
@@ -71,32 +63,12 @@ public class RobotBalanceAgent : Agent
     private int leftShoulderIndex, rightShoulderIndex;
     private int leftElbowIndex, rightElbowIndex;
 
-    // 前一帧关节角度
-    private float[] previousJointAngles;
-
     // 保存的初始关节状态（用于重置）
     private Vector3[] initialJointPositions;
     private Quaternion[] initialJointRotations;
     private float[] initialJointXTargets;
     private float[] initialJointYTargets;
     private float[] initialJointZTargets;
-
-    // 当前 drive target 基线值（用于相对计算）
-    private float[] baselineJointXTargets;
-    private float[] baselineJointYTargets;
-    private float[] baselineJointZTargets;
-
-    // 标记是否正在重置，避免重复触发
-    private bool isResetting = false;
-
-    // 跳过重置后的前几帧动作，让物理稳定
-    private int framesSinceReset = 0;
-    private const int RESET_STABLE_FRAMES = 3;
-
-    // 延迟重置机制
-    private bool isFailed = false;
-    private float failTimer = 0f;
-    [SerializeField] private float failDelayTime = 2f; // 失败后等待时间（秒）
 
     private void Awake()
     {
@@ -113,6 +85,10 @@ public class RobotBalanceAgent : Agent
             {
                 Debug.Log("[RobotBalanceAgent] 自动找到 robotRoot");
             }
+        }
+        if (!target)
+        {
+            target = new GameObject("Target").transform;
         }
     }
 
@@ -168,10 +144,7 @@ public class RobotBalanceAgent : Agent
         rightElbowIndex = FindJointIndex("Right_ElbowJoint");
 
         Debug.Log($"[RobotBalanceAgent] 关节索引: Torso={torsoIndex}, Neck={neckIndex}, L_Hip={leftHipIndex}, R_Hip={rightHipIndex}");
-
-        // 初始化前一帧角度数组
-        previousJointAngles = new float[12];
-
+        target.transform.position = allJoints[pelvisIndex].transform.position;
         // 保存所有关节的初始状态
         SaveInitialJointStates();
     }
@@ -188,9 +161,6 @@ public class RobotBalanceAgent : Agent
         initialJointXTargets = states.xTargets;
         initialJointYTargets = states.yTargets;
         initialJointZTargets = states.zTargets;
-        baselineJointXTargets = (float[])states.xTargets.Clone();
-        baselineJointYTargets = (float[])states.yTargets.Clone();
-        baselineJointZTargets = (float[])states.zTargets.Clone();
 
         Debug.Log($"[RobotBalanceAgent] 已保存 {states.jointCount} 个关节的初始状态");
     }
@@ -213,78 +183,11 @@ public class RobotBalanceAgent : Agent
 
     public override void OnEpisodeBegin()
     {
-        base.OnEpisodeBegin(); // 必须调用父类的方法
-
-        // 重置失败状态
-        isFailed = false;
-        failTimer = 0f;
-
-        Debug.Log($"[RobotBalanceAgent] ========== OnEpisodeBegin 被调用 ==========");
-        Debug.Log($"[RobotBalanceAgent] 当前机器人位置: {robotRoot.transform.position}");
-
-        // 防止重置过程中重复调用
-        if (isResetting)
-        {
-            Debug.LogWarning("[RobotBalanceAgent] OnEpisodeBegin: 正在重置中，跳过本次调用");
-            return;
-        }
-
+        //Debug.Log($"[RobotBalanceAgent] ========== OnEpisodeBegin 被调用 ==========");
         episodeTimer = 0f;
-        previousHeight = 0f;
-        framesSinceReset = 0; // 重置帧计数器
-
-        // 记录初始位置和旋转（从保存的状态获取）
-        int rootIndex = -1;
-        for (int i = 0; i < allJoints.Length; i++)
-        {
-            if (allJoints[i] == robotRoot)
-            {
-                rootIndex = i;
-                break;
-            }
-        }
-
-        if (rootIndex >= 0)
-        {
-            startPosition = initialJointPositions[rootIndex];
-            startRotation = initialJointRotations[rootIndex];
-            Debug.Log($"[RobotBalanceAgent] 保存的初始位置: {startPosition}");
-        }
 
         // 重置机器人姿态到初始状态
-        Debug.Log("[RobotBalanceAgent] 准备调用 ResetRobotPose");
         ResetRobotPose();
-        Debug.Log("[RobotBalanceAgent] ResetRobotPose 调用完成");
-
-        // 初始化当前状态，避免第一帧误判
-        currentHeight = robotRoot.transform.position.y;
-
-        // 使用躯干或臀部的旋转来判断倾角
-        Transform bodyTransform = null;
-        if (torsoIndex >= 0 && allJoints[torsoIndex] != null)
-        {
-            bodyTransform = allJoints[torsoIndex].transform;
-        }
-        else if (pelvisIndex >= 0 && allJoints[pelvisIndex] != null)
-        {
-            bodyTransform = allJoints[pelvisIndex].transform;
-        }
-
-        if (bodyTransform != null)
-        {
-            currentTiltAngle = Vector3.Angle(bodyTransform.up, Vector3.up);
-        }
-        else
-        {
-            currentTiltAngle = Vector3.Angle(robotRoot.transform.up, Vector3.up);
-        }
-
-        Debug.Log($"[RobotBalanceAgent] OnEpisodeBegin 结束:{bodyTransform.name} 高度={currentHeight:F2}m, 倾角={currentTiltAngle:F1}°, 位置={robotRoot.transform.position}");
-
-        if (showDebugInfo)
-        {
-            Debug.Log("Episode Start: 重置机器人姿态");
-        }
     }
 
     /// <summary>
@@ -292,8 +195,6 @@ public class RobotBalanceAgent : Agent
     /// </summary>
     private void ResetRobotPose()
     {
-        isResetting = true;
-
         RobotResetUtility.ResetRobotPose(
             robotRoot,
             initialJointPositions,
@@ -301,20 +202,25 @@ public class RobotBalanceAgent : Agent
             initialJointXTargets,
             initialJointYTargets,
             initialJointZTargets,
-            ref baselineJointXTargets,
-            ref baselineJointYTargets,
-            ref baselineJointZTargets,
             "[RobotBalanceAgent] ResetRobotPose:"
         );
-
-        isResetting = false;
     }
 
-    bool onGroundLeft, onGroundRight;
-    public void OnGround(bool left)
+    bool leftFootOnGround, rightFootOnGround;
+    bool pelvisOnGround, torsoOnGround;
+    public void BodyHit(string name)
     {
-        onGroundLeft = left;
-        onGroundRight = !left;
+        leftFootOnGround = name == "Left_Foot_Visual";
+        rightFootOnGround = name == "Right_Foot_Visual";
+        pelvisOnGround = name == "Pelvis_Visual";
+        torsoOnGround = name == "Torso_Visual";
+    }
+    public void ClearHit()
+    {
+        leftFootOnGround = false;
+        rightFootOnGround = false;
+        pelvisOnGround = false;
+        torsoOnGround = false;
     }
 
     public override void CollectObservations(VectorSensor sensor)
@@ -325,18 +231,22 @@ public class RobotBalanceAgent : Agent
             return;
         }
 
-        Debug.Log($"[RobotBalanceAgent] CollectObservations 被调用 - Step={StepCount}");
-
         int Ground = 0;
-        if (onGroundLeft)
+        if (leftFootOnGround)
         {
             Ground += 1;
-            onGroundLeft = false;
         }
-        if (onGroundRight)
+        if (rightFootOnGround)
         {
             Ground += 2;
-            onGroundRight = false;
+        }
+        if (pelvisOnGround)
+        {
+            Ground += 4;
+        }
+        if(torsoOnGround)
+        {
+            Ground += 8;
         }
 
         int dimensionality = 0;
@@ -372,81 +282,8 @@ public class RobotBalanceAgent : Agent
         sensor.AddObservation((int)targetType);
         sensor.AddObservation(target.position);
         dimensionality += 4;
-        Debug.Log($"总维度:{dimensionality}");
-        // 总观测维度: 1(位置) + 3(世界旋转) + 4(世界速度) + 12*3(关节局部旋转) + 12*3(关节局部角速度) = 77
-    }
-
-    /// <summary>
-    /// 归一化角度到-1到1范围
-    /// </summary>
-    private float NormalizeAngle(float angle)
-    {
-        angle = (angle + 180f) % 360f - 180f;
-        return Mathf.Clamp(angle / 180f, -1f, 1f);
-    }
-
-    /// <summary>
-    /// 获取所有关节的当前角度
-    /// </summary>
-    private float[] GetJointAngles()
-    {
-        float[] angles = new float[12];
-        int index = 0;
-
-        // 臀部、躯干、颈部
-        if (torsoIndex >= 0 && torsoIndex < allJoints.Length) angles[index++] = GetJointAngle(allJoints[torsoIndex]);
-        if (neckIndex >= 0 && neckIndex < allJoints.Length) angles[index++] = GetJointAngle(allJoints[neckIndex]);
-
-        // 左腿
-        if (leftHipIndex >= 0 && leftHipIndex < allJoints.Length) angles[index++] = GetJointAngle(allJoints[leftHipIndex]);
-        if (leftKneeIndex >= 0 && leftKneeIndex < allJoints.Length) angles[index++] = GetJointAngle(allJoints[leftKneeIndex]);
-        if (leftAnkleIndex >= 0 && leftAnkleIndex < allJoints.Length) angles[index++] = GetJointAngle(allJoints[leftAnkleIndex]);
-
-        // 右腿
-        if (rightHipIndex >= 0 && rightHipIndex < allJoints.Length) angles[index++] = GetJointAngle(allJoints[rightHipIndex]);
-        if (rightKneeIndex >= 0 && rightKneeIndex < allJoints.Length) angles[index++] = GetJointAngle(allJoints[rightKneeIndex]);
-        if (rightAnkleIndex >= 0 && rightAnkleIndex < allJoints.Length) angles[index++] = GetJointAngle(allJoints[rightAnkleIndex]);
-
-        // 左臂
-        if (leftShoulderIndex >= 0 && leftShoulderIndex < allJoints.Length) angles[index++] = GetJointAngle(allJoints[leftShoulderIndex]);
-        if (leftElbowIndex >= 0 && leftElbowIndex < allJoints.Length) angles[index++] = GetJointAngle(allJoints[leftElbowIndex]);
-
-        // 右臂
-        if (rightShoulderIndex >= 0 && rightShoulderIndex < allJoints.Length) angles[index++] = GetJointAngle(allJoints[rightShoulderIndex]);
-        if (rightElbowIndex >= 0 && rightElbowIndex < allJoints.Length) angles[index++] = GetJointAngle(allJoints[rightElbowIndex]);
-
-        return angles;
-    }
-
-    /// <summary>
-    /// 获取单个关节的角度
-    /// </summary>
-    private float GetJointAngle(ArticulationBody joint)
-    {
-        if (joint == null) return 0f;
-        return joint.xDrive.target; // 使用xDrive作为主要旋转轴
-    }
-
-    /// <summary>
-    /// 获取所有关节的角速度
-    /// </summary>
-    private float[] GetJointVelocities()
-    {
-        float[] velocities = new float[12];
-        int index = 0;
-
-        foreach (var joint in allJoints)
-        {
-            if (joint != null && joint.jointType != ArticulationJointType.FixedJoint)
-            {
-                if (index < 12)
-                {
-                    velocities[index++] = joint.angularVelocity.magnitude;
-                }
-            }
-        }
-
-        return velocities;
+        //Debug.Log($"总维度:{dimensionality}");
+        // 总观测维度: 12(根位置) + 12*3(关节局部旋转) + 12*3(关节局部角速度) + 1(Ground) + 1(targetType) + 3(target)= 89
     }
 
     public override void OnActionReceived(ActionBuffers actions)
@@ -456,15 +293,6 @@ public class RobotBalanceAgent : Agent
             Debug.LogError("[RobotBalanceAgent] OnActionReceived: robotRoot 为 null！");
             return;
         }
-
-        // 检查 Behavior Type：只有在训练模式或推理模式下才应用动作
-        //if (BehaviorType == BehaviorType.HeuristicOnly || BehaviorType == BehaviorType.InferenceOnly)
-        //{
-        //    // Heuristic 或 Inference 模式下不应用 AI 动作
-        //    return;
-        //}
-
-        Debug.Log($"[RobotBalanceAgent] OnActionReceived 被调用: Step={StepCount}");
 
         if (targetType == TargetType.None)
             return;
@@ -477,6 +305,8 @@ public class RobotBalanceAgent : Agent
 
         // 检查终止条件
         CheckTermination();
+
+        ClearHit();
 
         episodeTimer += Time.fixedDeltaTime;
     }
@@ -577,21 +407,6 @@ public class RobotBalanceAgent : Agent
             zDrive.target = zForce * 180;
             joint.zDrive = zDrive;
         }
-        // 将AI输出[-1,1]转换为[0,1]范围，再映射到关节角度范围内
-        //float xNormalized = (xForce + 1f) / 2f;
-        //xDrive.target = Mathf.LerpAngle(xDrive.lowerLimit, xDrive.upperLimit, xNormalized);
-        //joint.xDrive = xDrive;
-
-        //if (joint.jointType == ArticulationJointType.SphericalJoint)
-        //{
-        //    float yNormalized = (yForce + 1f) / 2f;
-        //    yDrive.target = Mathf.LerpAngle(yDrive.lowerLimit, yDrive.upperLimit, yNormalized);
-        //    joint.yDrive = yDrive;
-
-        //    float zNormalized = (zForce + 1f) / 2f;
-        //    zDrive.target = Mathf.LerpAngle(zDrive.lowerLimit, zDrive.upperLimit, zNormalized);
-        //    joint.zDrive = zDrive;
-        //}
     }
 
     /// <summary>
@@ -615,112 +430,49 @@ public class RobotBalanceAgent : Agent
 
     public void Ballance()
     {
-        // 获取臀部位置
-        Vector3 pelvisPosition = Vector3.zero;
-        if (pelvisIndex >= 0 && allJoints[pelvisIndex] != null)
-        {
-            pelvisPosition = allJoints[pelvisIndex].transform.position;
-        }
-        else if (robotRoot != null)
-        {
-            pelvisPosition = robotRoot.transform.position;
-        }
+        // ===== 1. 获取核心状态 =====
+        Vector3 pelvisPos = allJoints[pelvisIndex].transform.position;
 
-        currentHeight = pelvisPosition.y;
+        Transform body = (torsoIndex >= 0) ? allJoints[torsoIndex].transform : robotRoot.transform;
 
-        // 使用躯干或臀部的旋转来判断倾角（使用世界坐标系的up方向）
-        Transform bodyTransform = null;
-        if (torsoIndex >= 0 && allJoints[torsoIndex] != null)
-        {
-            bodyTransform = allJoints[torsoIndex].transform;
-        }
-        else if (pelvisIndex >= 0 && allJoints[pelvisIndex] != null)
-        {
-            bodyTransform = allJoints[pelvisIndex].transform;
-        }
+        currentTiltAngle = Vector3.Angle(body.up, Vector3.up); // 0 ~ 180
+        float height = pelvisPos.y;
 
-        if (bodyTransform != null)
-        {
-            Vector3 worldUp = bodyTransform.rotation * Vector3.up;
-            currentTiltAngle = Vector3.Angle(worldUp, Vector3.up);
+        // ===== 2. 基础站立奖励（核心）=====
+        float upright = Mathf.Clamp01(1f - currentTiltAngle / maxTiltAngle); // 越直越接近1
+        AddReward(upright * 0.02f);
 
-            if (StepCount % 100 == 0)
-            {
-                Debug.Log($"[RobotBalanceAgent] {bodyTransform.name} - localRotation: {bodyTransform.localRotation.eulerAngles:F1}, worldUp angle: {currentTiltAngle:F1}°");
-            }
-        }
-        else
+        // ===== 3. 高度奖励（防止蹲着）=====
+        currentHeight = Mathf.Abs(height - target.transform.position.y);
+        float heightReward = Mathf.Exp(-currentHeight * 5f);
+        AddReward(heightReward * 0.01f);
+
+        // ===== 4. Ground 接触（关键新增）=====
+        // 只允许脚接触地面
+        if (pelvisOnGround || torsoOnGround)
         {
-            currentTiltAngle = Vector3.Angle(robotRoot.transform.up, Vector3.up);
+            AddReward(-0.05f); // 强惩罚（倒地）
         }
 
-        // 1. 距离目标点的奖励（臀部越靠近目标点分数越高）
-        float distanceReward = 0f;
-        if (target != null)
-        {
-            // 计算臀部到目标点的水平距离（只考虑x和z方向）
-            Vector3 pelvisXZ = new Vector3(pelvisPosition.x, 0, pelvisPosition.z);
-            Vector3 targetXZ = new Vector3(target.position.x, 0, target.position.z);
-            float horizontalDistance = Vector3.Distance(pelvisXZ, targetXZ);
+        // 鼓励双脚着地（稳定）
+        int footCount = 0;
+        if (leftFootOnGround) footCount++;
+        if (rightFootOnGround) footCount++;
 
-            // 距离越小，奖励越高（使用指数衰减）
-            distanceReward = Mathf.Exp(-horizontalDistance) * heightRewardMultiplier;
+        AddReward(footCount * 0.01f);
 
-            // 高度方向的奖励（接近目标高度）
-            float heightDistance = Mathf.Abs(pelvisPosition.y - target.position.y);
-            float heightReward = Mathf.Exp(-heightDistance) * heightRewardMultiplier;
+        // ===== 5. 动作平滑（防抖）=====
+        //float movementPenalty = 0f;
+        //float[] currentAngles = GetJointAngles();
 
-            // 综合距离奖励
-            distanceReward = (distanceReward + heightReward) * 0.5f;
-        }
+        //for (int i = 0; i < currentAngles.Length; i++)
+        //{
+        //    movementPenalty += Mathf.Abs(currentAngles[i] - previousJointAngles[i]);
+        //}
 
-        // 2. 倾斜惩罚
-        float tiltPenalty = (currentTiltAngle / maxTiltAngle) * tiltPenaltyMultiplier;
+        //previousJointAngles = currentAngles;
 
-        // 3. 距离变化奖励（向目标移动）
-        float approachReward = 0f;
-        if (target != null)
-        {
-            Vector3 pelvisXZ = new Vector3(pelvisPosition.x, 0, pelvisPosition.z);
-            Vector3 targetXZ = new Vector3(target.position.x, 0, target.position.z);
-            float currentDistance = Vector3.Distance(pelvisXZ, targetXZ);
-
-            // 比较前一帧的位置（使用保存的startPosition作为参考）
-            Vector3 prevXZ = new Vector3(startPosition.x, 0, startPosition.z);
-            float prevDistance = Vector3.Distance(prevXZ, targetXZ);
-
-            // 向目标移动给予奖励
-            if (currentDistance < prevDistance)
-            {
-                approachReward = (prevDistance - currentDistance) * heightRewardMultiplier;
-            }
-        }
-
-        // 4. 关节移动惩罚（避免过度摆动）
-        float movementPenalty = 0f;
-        float[] currentJointAngles = GetJointAngles();
-        for (int i = 0; i < Mathf.Min(previousJointAngles.Length, currentJointAngles.Length); i++)
-        {
-            movementPenalty += Mathf.Abs(currentJointAngles[i] - previousJointAngles[i]);
-        }
-        movementPenalty *= jointMovementPenalty;
-
-        // 更新前一帧角度
-        previousJointAngles = currentJointAngles;
-
-        // 5. 基础存活奖励
-        float survivalReward = uprightReward;
-
-        // 总奖励
-        float totalReward = survivalReward + distanceReward + approachReward
-                          - tiltPenalty - movementPenalty;
-
-        AddReward(totalReward);
-
-        if (showDebugInfo)
-        {
-            Debug.Log($"Reward: {totalReward:F4} | Distance: {distanceReward:F4} | Approach: {approachReward:F4} | Tilt: {-tiltPenalty:F4} | Movement: {-movementPenalty:F4}");
-        }
+        //AddReward(-movementPenalty * 0.0005f);
     }
 
     /// <summary>
@@ -730,124 +482,31 @@ public class RobotBalanceAgent : Agent
     {
         if (robotRoot == null) return;
 
-        // 每100帧打印一次状态用于调试
-        if (StepCount % 100 == 0)
+        // 倒地（核心终止）
+        if (pelvisOnGround || torsoOnGround)
         {
-            Debug.Log($"[RobotBalanceAgent] 状态检查 - Step:{StepCount}, 高度:{currentHeight:F2}m, 倾角:{currentTiltAngle:F1}°, 时间:{episodeTimer:F1}s");
-        }
-
-        // 渐进式惩罚机制：当接近失败条件时，逐渐增加惩罚
-        // 给机器人时间纠正自己
-
-        // 渐进式惩罚1：倾斜过度警告
-        if (!isFailed && currentTiltAngle > maxTiltAngle)
-        {
-            // 超过最大倾角，开始计时惩罚
-            if (failTimer == 0f)
-            {
-                Debug.Log($"[RobotBalanceAgent] 警告: 倾斜角度 {currentTiltAngle:F1}° > {maxTiltAngle}°，开始计时 {failDelayTime} 秒");
-            }
-
-            failTimer += Time.fixedDeltaTime;
-            // 每帧给予渐进惩罚
-            float progressivePenalty = -0.01f * (failTimer / failDelayTime);
-            AddReward(progressivePenalty);
-
-            if (showDebugInfo && StepCount % 50 == 0)
-            {
-                Debug.Log($"[RobotBalanceAgent] 倾斜惩罚中: {failTimer:F1}s / {failDelayTime}s, 累计惩罚: {progressivePenalty:F4}");
-            }
-
-            // 如果持续超时则真正失败
-            if (failTimer >= failDelayTime)
-            {
-                Debug.Log($"[RobotBalanceAgent] 失败: 倾斜角度持续 {failDelayTime} 秒无法纠正");
-                AddReward(-1f);
-                isFailed = true;
-                EndEpisode();
-                return;
-            }
-        }
-        else
-        {
-            // 如果倾角恢复正常，重置计时器
-            if (failTimer > 0f)
-            {
-                failTimer = 0f;
-            }
-        }
-
-        // 渐进式惩罚2：高度过低警告
-        if (!isFailed && currentHeight < targetHeight * 0.5f)
-        {
-            if (failTimer == 0f)
-            {
-                Debug.Log($"[RobotBalanceAgent] 警告: 高度 {currentHeight:F2}m < {targetHeight * 0.5f:F2}m，开始计时 {failDelayTime} 秒");
-            }
-
-            failTimer += Time.fixedDeltaTime;
-            float progressivePenalty = -0.01f * (failTimer / failDelayTime);
-            AddReward(progressivePenalty);
-
-            if (failTimer >= failDelayTime)
-            {
-                Debug.Log($"[RobotBalanceAgent] 失败: 高度过低持续 {failDelayTime} 秒无法恢复");
-                AddReward(-1f);
-                isFailed = true;
-                EndEpisode();
-                return;
-            }
-        }
-        else
-        {
-            if (failTimer > 0f)
-            {
-                failTimer = 0f;
-            }
-        }
-
-        // 渐进式惩罚3：偏离初始位置过远
-        float horizontalDistance = Vector2.Distance(
-            new Vector2(robotRoot.transform.position.x, robotRoot.transform.position.z),
-            new Vector2(startPosition.x, startPosition.z)
-        );
-        if (!isFailed && horizontalDistance > 0.5f)
-        {
-            if (failTimer == 0f)
-            {
-                Debug.Log($"[RobotBalanceAgent] 警告: 偏离位置 {horizontalDistance:F2}m > 0.5m，开始计时 {failDelayTime} 秒");
-            }
-
-            failTimer += Time.fixedDeltaTime;
-            float progressivePenalty = -0.005f * (failTimer / failDelayTime);
-            AddReward(progressivePenalty);
-
-            if (failTimer >= failDelayTime)
-            {
-                Debug.Log($"[RobotBalanceAgent] 失败: 偏离位置持续 {failDelayTime} 秒");
-                AddReward(-0.5f);
-                isFailed = true;
-                EndEpisode();
-                return;
-            }
-        }
-        else
-        {
-            if (failTimer > 0f)
-            {
-                failTimer = 0f;
-            }
-        }
-
-        // 成功条件：达到目标站立时间
-        if (episodeTimer >= targetStandTime)
-        {
-            AddReward(completionReward);
+            AddReward(-1f);
             EndEpisode();
-            if (showDebugInfo)
-            {
-                Debug.Log($"Episode Success: 成功站立 {episodeTimer:F1}秒");
-            }
+            //Debug.Log($"中止，倒地");
+            return;
+        }
+
+        // 倾斜过大
+        if (currentTiltAngle > maxTiltAngle)
+        {
+            AddReward(-0.5f);
+            EndEpisode();
+            //Debug.Log($"中止，倾斜过大{currentTiltAngle}");
+            return;
+        }
+
+        // 高度误差过大
+        if (currentHeight > targetHeightDiff)
+        {
+            AddReward(-0.5f);
+            EndEpisode();
+            //Debug.Log($"中止，高度{currentHeight}超过阈值{targetHeightDiff}");
+            return;
         }
     }
 
@@ -919,8 +578,8 @@ public class RobotBalanceAgent : Agent
         // 绘制目标高度线
         Gizmos.color = Color.green;
         Gizmos.DrawLine(
-            new Vector3(robotRoot.transform.position.x, targetHeight, robotRoot.transform.position.z),
-            new Vector3(robotRoot.transform.position.x, targetHeight + 0.1f, robotRoot.transform.position.z)
+            new Vector3(robotRoot.transform.position.x, targetHeightDiff, robotRoot.transform.position.z),
+            new Vector3(robotRoot.transform.position.x, targetHeightDiff + 0.1f, robotRoot.transform.position.z)
         );
 
         // 绘制机器人朝向

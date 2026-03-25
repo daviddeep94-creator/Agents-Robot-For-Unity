@@ -1,8 +1,9 @@
-using UnityEditor;
-using UnityEngine;
 using System;
+using System.Drawing;
 using System.IO;
 using System.Text;
+using UnityEditor;
+using UnityEngine;
 
 /// <summary>
 /// 在编辑器里快速生成一套 ArticulationBody 机器人（方块拼接）。
@@ -626,11 +627,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         );
 
         // 在踝关节节点下添加脚板视觉/碰撞实体
-        GameObject go = CreateVisualCollider(ankleJoint.transform, side + "_Foot_Visual", footSize, new Vector3(0, -footSize.y * 0.5f, footSize.z * 0.3f));
-        if(go.TryGetComponent(out Collider collider) && !go.TryGetComponent(out Foot foot))
-        {
-            go.AddComponent<Foot>();
-        }
+        CreateVisualCollider(ankleJoint.transform, side + "_Foot_Visual", footSize, new Vector3(0, -footSize.y * 0.5f, footSize.z * 0.3f));
     }
 
     private static void CreateArm(
@@ -847,7 +844,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
     /// 实体可以有任意缩放，不影响关节节点的物理计算
     /// 注意：移除 ArticulationBody 是因为物理质量由关节节点控制，避免重复计算
     /// </summary>
-    private static GameObject CreateVisualCollider(
+    private static void CreateVisualCollider(
         Transform parent,
         string name,
         Vector3 size,
@@ -867,7 +864,12 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         // 实体不需要 ArticulationBody，只需要 Collider
         var articulation = go.GetComponent<ArticulationBody>();
         DestroyImmediate(articulation);
-        return go;
+
+        if (!go.TryGetComponent(out BodyHit hit))
+        {
+            go.AddComponent<BodyHit>();
+        }
+
     }
 
     /// <summary>

@@ -30,6 +30,8 @@ public class RobotBalanceAgent : Agent
     [Tooltip("最大允许的倾斜角度（度）")]
     [SerializeField] private float maxTiltAngle = 30f;
 
+    [Tooltip("锁定身体上半部分")]
+    [SerializeField] private bool lockBodyUp = true;
     //[Header("奖励配置")]
     //[Tooltip("每帧保持直立的基础奖励")]
     //[SerializeField] private float uprightReward = 0.01f;
@@ -50,7 +52,7 @@ public class RobotBalanceAgent : Agent
     [SerializeField] private TargetType targetType = TargetType.BalancePoint;
     // 状态变量
     private float episodeTimer;
-    private float currentHeight;
+    private float currentDis;
     private float currentTiltAngle;
 
     private ArticulationBody[] allJoints;
@@ -250,40 +252,68 @@ public class RobotBalanceAgent : Agent
         }
 
         int dimensionality = 0;
+        ArticulationBody body = allJoints[pelvisIndex];
+        // 计算机器人整体重心和整体速度
+        Vector3 centerOfMass = Vector3.zero;
+        Vector3 centerOfMassVelocity = Vector3.zero;
+        float totalMass = 0f;
 
-        // 1. 机器人根节点世界位置
-        sensor.AddObservation(robotRoot.transform.position);
-        dimensionality += 3;
-
-        // 2. 机器人根节点世界旋转
-        sensor.AddObservation(robotRoot.transform.rotation.eulerAngles);
-        dimensionality += 3;
-        // 3. 机器人根节点速度
-        sensor.AddObservation(robotRoot.velocity);
-        dimensionality += 3;
-        // 4. 机器人根节点角速度
-        sensor.AddObservation(robotRoot.angularVelocity);
-        dimensionality += 3;
-
-        // 5. 各关节局部旋转 角速度
         foreach (var joint in allJoints)
         {
-            if (joint == robotRoot) continue;
+            if (joint != null)
+            {
+                float mass = joint.mass;
+                centerOfMass += (joint.worldCenterOfMass-body.transform.position) * mass;
+                centerOfMassVelocity += joint.velocity * mass;
+                totalMass += mass;
+            }
+        }
+
+        if (totalMass > 0)
+        {
+            centerOfMass /= totalMass;
+            centerOfMassVelocity /= totalMass;
+        }
+        
+        // 1. 机器人整体重心
+        sensor.AddObservation(centerOfMass);
+        dimensionality += 3;
+
+        // 2. 机器人整体速度
+        sensor.AddObservation(centerOfMassVelocity);
+        dimensionality += 3;
+
+        // 3. 机器人根节点世界旋转
+        sensor.AddObservation(body.transform.rotation.eulerAngles);
+        dimensionality += 3;
+        // 4. 机器人根节点上向量
+        sensor.AddObservation(body.transform.up);
+        dimensionality += 3;
+        // 5. 踝关节上向量
+        sensor.AddObservation(allJoints[leftAnkleIndex].transform.up);
+        sensor.AddObservation(allJoints[rightAnkleIndex].transform.up);
+        dimensionality += 6;
+
+        // 6. 各关节局部旋转12*3=36
+        foreach (var joint in allJoints)
+        {
+            if (joint == body) continue;
             if (joint != null && joint.jointType != ArticulationJointType.FixedJoint)
             {
                 sensor.AddObservation(joint.transform.localRotation.eulerAngles);
-                sensor.AddObservation(joint.angularVelocity);
-                dimensionality += 6;
+                dimensionality += 3;
             }
         }
+
         sensor.AddObservation(Ground);
         dimensionality += 1;
 
         sensor.AddObservation((int)targetType);
-        sensor.AddObservation(target.position);
+        sensor.AddObservation(target.position-body.transform.position);
         dimensionality += 4;
+
         //Debug.Log($"总维度:{dimensionality}");
-        // 总观测维度: 12(根位置) + 12*3(关节局部旋转) + 12*3(关节局部角速度) + 1(Ground) + 1(targetType) + 3(target)= 89
+        // 总观测维度: 12(根位置) + 6(踝关节上向量) + 12*3(关节局部旋转) + 1(Ground) + 1(targetType) + 3(target)= 59
     }
 
     public override void OnActionReceived(ActionBuffers actions)
@@ -318,18 +348,6 @@ public class RobotBalanceAgent : Agent
     {
         int index = 0;
 
-        // 身体（1轴）
-        if (torsoIndex >= 0)
-        {
-            ApplyForceToJoint(allJoints[torsoIndex], actions[index++], 0, 0);
-        }
-
-        // 脖子（3轴）
-        if (neckIndex >= 0)
-        {
-            ApplyForceToJoint(allJoints[neckIndex], actions[index++], actions[index++], actions[index++]);
-        }
-
         // 左腿
         if (leftHipIndex >= 0)  // 髋关节（3轴）
         {
@@ -339,9 +357,9 @@ public class RobotBalanceAgent : Agent
         {
             ApplyForceToJoint(allJoints[leftKneeIndex], actions[index++], 0, 0);
         }
-        if (leftAnkleIndex >= 0)  // 踝关节（3轴）
+        if (leftAnkleIndex >= 0)  // 踝关节（1轴）
         {
-            ApplyForceToJoint(allJoints[leftAnkleIndex], actions[index++], actions[index++], actions[index++]);
+            ApplyForceToJoint(allJoints[leftAnkleIndex], actions[index++], 0, 0);
         }
 
         // 右腿
@@ -353,32 +371,44 @@ public class RobotBalanceAgent : Agent
         {
             ApplyForceToJoint(allJoints[rightKneeIndex], actions[index++], 0, 0);
         }
-        if (rightAnkleIndex >= 0)  // 踝关节（3轴）
+        if (rightAnkleIndex >= 0)  // 踝关节（1轴）
         {
-            ApplyForceToJoint(allJoints[rightAnkleIndex], actions[index++], actions[index++], actions[index++]);
+            ApplyForceToJoint(allJoints[rightAnkleIndex], actions[index++], 0, 0);
         }
 
-        // 左臂
-        if (leftShoulderIndex >= 0)  // 肩关节（3轴）
+        if(!lockBodyUp)
         {
-            ApplyForceToJoint(allJoints[leftShoulderIndex], actions[index++], actions[index++], actions[index++]);
-        }
-        if (leftElbowIndex >= 0)  // 肘关节（1轴）
-        {
-            ApplyForceToJoint(allJoints[leftElbowIndex], actions[index++], 0, 0);
-        }
+                    // 左臂
+            if (leftShoulderIndex >= 0)  // 肩关节（3轴）
+            {
+                ApplyForceToJoint(allJoints[leftShoulderIndex], actions[index++], actions[index++], actions[index++]);
+            }
+            if (leftElbowIndex >= 0)  // 肘关节（1轴）
+            {
+                ApplyForceToJoint(allJoints[leftElbowIndex], actions[index++], 0, 0);
+            }
+            // 右臂
+            if (rightShoulderIndex >= 0)  // 肩关节（3轴）
+            {
+                ApplyForceToJoint(allJoints[rightShoulderIndex], actions[index++], actions[index++], actions[index++]);
+            }
+            if (rightElbowIndex >= 0)  // 肘关节（1轴）
+            {
+                ApplyForceToJoint(allJoints[rightElbowIndex], actions[index++], 0, 0);
+            }
+            // 身体（2轴）
+            if (torsoIndex >= 0)
+            {
+                ApplyForceToJoint(allJoints[torsoIndex], actions[index++], 0, actions[index++]);
+            }
 
-        // 右臂
-        if (rightShoulderIndex >= 0)  // 肩关节（3轴）
-        {
-            ApplyForceToJoint(allJoints[rightShoulderIndex], actions[index++], actions[index++], actions[index++]);
+            // 脖子（2轴）
+            if (neckIndex >= 0)
+            {
+                ApplyForceToJoint(allJoints[neckIndex], actions[index++], actions[index++], 0);
+            }
         }
-        if (rightElbowIndex >= 0)  // 肘关节（1轴）
-        {
-            ApplyForceToJoint(allJoints[rightElbowIndex], actions[index++], 0, 0);
-        }
-
-        //一共26轴
+        //一共22轴
     }
 
     /// <summary>
@@ -431,20 +461,19 @@ public class RobotBalanceAgent : Agent
     public void Ballance()
     {
         // ===== 1. 获取核心状态 =====
-        Vector3 pelvisPos = allJoints[pelvisIndex].transform.position;
+        Transform pelvisPos = allJoints[pelvisIndex].transform;
 
-        Transform body = (torsoIndex >= 0) ? allJoints[torsoIndex].transform : robotRoot.transform;
+        // Transform body = (torsoIndex >= 0) ? allJoints[torsoIndex].transform : robotRoot.transform;
 
-        currentTiltAngle = Vector3.Angle(body.up, Vector3.up); // 0 ~ 180
-        float height = pelvisPos.y;
+        currentTiltAngle = Vector3.Angle(pelvisPos.up, Vector3.up); // 0 ~ 180
 
         // ===== 2. 基础站立奖励（核心）=====
         float upright = Mathf.Clamp01(1f - currentTiltAngle / maxTiltAngle); // 越直越接近1
         AddReward(upright * 0.02f);
 
-        // ===== 3. 高度奖励（防止蹲着）=====
-        currentHeight = Mathf.Abs(height - target.transform.position.y);
-        float heightReward = Mathf.Exp(-currentHeight * 5f);
+        // ===== 3. 目标距离奖励（防止蹲着）=====
+        currentDis = (pelvisPos.position - target.transform.position).magnitude;
+        float heightReward = Mathf.Exp(-currentDis * 5f);
         AddReward(heightReward * 0.01f);
 
         // ===== 4. Ground 接触（关键新增）=====
@@ -455,11 +484,12 @@ public class RobotBalanceAgent : Agent
         }
 
         // 鼓励双脚着地（稳定）
-        int footCount = 0;
-        if (leftFootOnGround) footCount++;
-        if (rightFootOnGround) footCount++;
-
-        AddReward(footCount * 0.01f);
+        float footReward = 0;
+        if (leftFootOnGround) footReward += 0.005f;
+        if (rightFootOnGround) footReward += 0.005f;
+        footReward += ((Vector3.Dot(allJoints[leftAnkleIndex].transform.up, Vector3.up)) - 0.5f) * 0.02f;
+        footReward += ((Vector3.Dot(allJoints[rightAnkleIndex].transform.up, Vector3.up)) - 0.5f) * 0.02f;
+        AddReward(footReward);
 
         // ===== 5. 动作平滑（防抖）=====
         //float movementPenalty = 0f;
@@ -501,7 +531,7 @@ public class RobotBalanceAgent : Agent
         }
 
         // 高度误差过大
-        if (currentHeight > targetHeightDiff)
+        if (currentDis > targetHeightDiff)
         {
             AddReward(-0.5f);
             EndEpisode();
@@ -523,52 +553,92 @@ public class RobotBalanceAgent : Agent
             continuousActions[i] = 0f;
         }
 
-        // 身体（1轴）- index 0
-        continuousActions[0] = Input.GetAxis("Vertical"); // 躯干前后
+        int index = 0;
 
-        // 脖子（3轴）- index 1-3
-        continuousActions[1] = Input.GetKey(KeyCode.W) ? 1f : (Input.GetKey(KeyCode.S) ? -1f : 0f); // 前后
-        continuousActions[2] = Input.GetKey(KeyCode.A) ? 1f : (Input.GetKey(KeyCode.D) ? -1f : 0f); // 左右
-        continuousActions[3] = Input.GetKey(KeyCode.Q) ? 1f : (Input.GetKey(KeyCode.E) ? -1f : 0f); // 上下
+        // 身体（2轴）- index 0-1
+        if (!lockBodyUp && torsoIndex >= 0)
+        {
+            continuousActions[index++] = Input.GetKey(KeyCode.Alpha1) ? 1f : (Input.GetKey(KeyCode.Alpha2) ? -1f : 0f);
+            continuousActions[index++] = Input.GetKey(KeyCode.Alpha3) ? 1f : (Input.GetKey(KeyCode.Alpha4) ? -1f : 0f);
+        }
+
+        // 脖子（2轴）- index 2-3
+        if (!lockBodyUp && neckIndex >= 0)
+        {
+            continuousActions[index++] = Input.GetKey(KeyCode.W) ? 1f : (Input.GetKey(KeyCode.S) ? -1f : 0f);
+            continuousActions[index++] = Input.GetKey(KeyCode.A) ? 1f : (Input.GetKey(KeyCode.D) ? -1f : 0f);
+        }
 
         // 左髋（3轴）- index 4-6
-        continuousActions[4] = Input.GetKey(KeyCode.R) ? 1f : 0f;
-        continuousActions[5] = Input.GetKey(KeyCode.F) ? 1f : 0f;
-        continuousActions[6] = Input.GetKey(KeyCode.V) ? 1f : 0f;
+        if (leftHipIndex >= 0)
+        {
+            continuousActions[index++] = Input.GetKey(KeyCode.R) ? 1f : (Input.GetKey(KeyCode.F) ? -1f : 0f);
+            continuousActions[index++] = Input.GetKey(KeyCode.T) ? 1f : (Input.GetKey(KeyCode.G) ? -1f : 0f);
+            continuousActions[index++] = Input.GetKey(KeyCode.Y) ? 1f : (Input.GetKey(KeyCode.H) ? -1f : 0f);
+        }
 
         // 左膝（1轴）- index 7
-        continuousActions[7] = Input.GetKey(KeyCode.T) ? 1f : 0f;
+        if (leftKneeIndex >= 0)
+        {
+            continuousActions[index++] = Input.GetKey(KeyCode.U) ? 1f : (Input.GetKey(KeyCode.J) ? -1f : 0f);
+        }
 
-        // 左踝（3轴）- index 8-10
-        continuousActions[8] = Input.GetKey(KeyCode.Y) ? 1f : 0f;
-        continuousActions[9] = Input.GetKey(KeyCode.G) ? 1f : 0f;
-        continuousActions[10] = Input.GetKey(KeyCode.B) ? 1f : 0f;
+        // 左踝（1轴）- index 8
+        if (leftAnkleIndex >= 0)
+        {
+            continuousActions[index++] = Input.GetKey(KeyCode.I) ? 1f : (Input.GetKey(KeyCode.K) ? -1f : 0f);
+        }
 
-        // 右髋（3轴）- index 11-13
-        continuousActions[11] = Input.GetKey(KeyCode.U) ? 1f : 0f;
-        continuousActions[12] = Input.GetKey(KeyCode.J) ? 1f : 0f;
-        continuousActions[13] = Input.GetKey(KeyCode.N) ? 1f : 0f;
+        // 右髋（3轴）- index 9-11
+        if (rightHipIndex >= 0)
+        {
+            continuousActions[index++] = Input.GetKey(KeyCode.O) ? 1f : (Input.GetKey(KeyCode.L) ? -1f : 0f);
+            continuousActions[index++] = Input.GetKey(KeyCode.P) ? 1f : (Input.GetKey(KeyCode.Semicolon) ? -1f : 0f);
+            continuousActions[index++] = Input.GetKey(KeyCode.LeftBracket) ? 1f : (Input.GetKey(KeyCode.RightBracket) ? -1f : 0f);
+        }
 
-        // 右膝（1轴）- index 14
-        continuousActions[14] = Input.GetKey(KeyCode.I) ? 1f : 0f;
+        // 右膝（1轴）- index 12
+        if (rightKneeIndex >= 0)
+        {
+            continuousActions[index++] = Input.GetKey(KeyCode.Z) ? 1f : (Input.GetKey(KeyCode.X) ? -1f : 0f);
+        }
 
-        // 右踝（3轴）- index 15-17
-        continuousActions[15] = Input.GetKey(KeyCode.O) ? 1f : 0f;
-        continuousActions[16] = Input.GetKey(KeyCode.K) ? 1f : 0f;
-        continuousActions[17] = Input.GetKey(KeyCode.M) ? 1f : 0f;
+        // 右踝（1轴）- index 13
+        if (rightAnkleIndex >= 0)
+        {
+            continuousActions[index++] = Input.GetKey(KeyCode.C) ? 1f : (Input.GetKey(KeyCode.V) ? -1f : 0f);
+        }
 
-        // 左肩（3轴）- index 18-20
-        continuousActions[18] = Input.GetKey(KeyCode.Z) ? 1f : 0f;
-        continuousActions[19] = Input.GetKey(KeyCode.X) ? 1f : 0f;
-        continuousActions[20] = Input.GetKey(KeyCode.C) ? 1f : 0f;
+        if (!lockBodyUp)
+        {
+            // 左肩（3轴）- index 14-16
+            if (leftShoulderIndex >= 0)
+            {
+                continuousActions[index++] = Input.GetKey(KeyCode.B) ? 1f : (Input.GetKey(KeyCode.N) ? -1f : 0f);
+                continuousActions[index++] = Input.GetKey(KeyCode.M) ? 1f : (Input.GetKey(KeyCode.Comma) ? -1f : 0f);
+                continuousActions[index++] = Input.GetKey(KeyCode.Period) ? 1f : (Input.GetKey(KeyCode.Slash) ? -1f : 0f);
+            }
 
-        // 左肘（1轴）- index 21
-        continuousActions[21] = Input.GetKey(KeyCode.Alpha1) ? 1f : 0f;
+            // 左肘（1轴）- index 17
+            if (leftElbowIndex >= 0)
+            {
+                continuousActions[index++] = Input.GetKey(KeyCode.Q) ? 1f : (Input.GetKey(KeyCode.W) ? -1f : 0f);
+            }
 
-        // 右肩（3轴）- index 22-24
-        continuousActions[22] = Input.GetKey(KeyCode.Alpha2) ? 1f : 0f;
-        continuousActions[23] = Input.GetKey(KeyCode.Alpha3) ? 1f : 0f;
-        continuousActions[24] = Input.GetKey(KeyCode.Alpha4) ? 1f : 0f;
+            // 右肩（3轴）- index 18-20
+            if (rightShoulderIndex >= 0)
+            {
+                continuousActions[index++] = Input.GetKey(KeyCode.E) ? 1f : (Input.GetKey(KeyCode.R) ? -1f : 0f);
+                continuousActions[index++] = Input.GetKey(KeyCode.T) ? 1f : (Input.GetKey(KeyCode.Y) ? -1f : 0f);
+                continuousActions[index++] = Input.GetKey(KeyCode.U) ? 1f : (Input.GetKey(KeyCode.I) ? -1f : 0f);
+            }
+
+            // 右肘（1轴）- index 21
+            if (rightElbowIndex >= 0)
+            {
+                continuousActions[index++] = Input.GetKey(KeyCode.O) ? 1f : (Input.GetKey(KeyCode.P) ? -1f : 0f);
+            }
+        }
     }
 
     private void OnDrawGizmos()

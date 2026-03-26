@@ -26,7 +26,7 @@ public static class RobotResetUtility
         float[] initialJointZTargets,
         string logPrefix = "[RobotResetUtility]")
     {
-        Debug.Log($"{logPrefix} 开始重置机器人");
+        //Debug.Log($"{logPrefix} 开始重置机器人");
 
         ArticulationBody[] allJoints = robotRoot.GetComponentsInChildren<ArticulationBody>();
 
@@ -70,7 +70,7 @@ public static class RobotResetUtility
             allJoints[i].enabled = true;
         }
 
-        Debug.Log($"{logPrefix} 重置完成");
+        //Debug.Log($"{logPrefix} 重置完成");
     }
 
 

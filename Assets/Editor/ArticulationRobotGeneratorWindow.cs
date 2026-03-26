@@ -95,10 +95,9 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
     // 膝关节：只能向前弯曲150度
     [SerializeField] private Vector2 kneeTwist = new Vector2(0f, 150f);  // 弯曲(X轴)
 
-    // 踝关节：前后45度，左右20度，扭转15度
+    // 踝关节：只能前后摆动45度
     [SerializeField] private Vector2 ankleTwist = new Vector2(-45f, 45f);  // 前后摆动(X轴)
-    [SerializeField] private Vector2 ankleSwingY = new Vector2(-15f, 15f);  // 扭转(Y轴)
-    [SerializeField] private Vector2 ankleSwingZ = new Vector2(-20f, 20f);  // 左右摆动(Z轴)
+
 
     // 肩关节：前后180度，左右90度，扭转180度
     [SerializeField] private Vector2 shoulderTwist = new Vector2(-180f, 180f);  // 前后摆动(X轴)
@@ -218,8 +217,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         EditorGUILayout.LabelField("踝关节", EditorStyles.miniBoldLabel);
         EditorGUILayout.BeginHorizontal();
         ankleTwist = EditorGUILayout.Vector2Field("前后(X)", ankleTwist, GUILayout.Width(200));
-        ankleSwingY = EditorGUILayout.Vector2Field("扭转(Y)", ankleSwingY, GUILayout.Width(200));
-        ankleSwingZ = EditorGUILayout.Vector2Field("左右(Z)", ankleSwingZ, GUILayout.Width(200));
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.Space(4);
@@ -494,13 +491,13 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             hipJointLocalYInPelvis, kneeJointLocalYInPelvis, ankleJointLocalYInPelvis,
             angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
             hipJointStiffness, kneeJointStiffness, ankleJointStiffness,
-            hipTwist, hipSwingY, hipSwingZ, kneeTwist, ankleTwist, ankleSwingY, ankleSwingZ);
+            hipTwist, hipSwingY, hipSwingZ, kneeTwist, ankleTwist);
         CreateLeg(pelvis.transform, "Right", legOffsetX, upperLegVisualSize, lowerLegVisualSize, footSize,
             upperLegLength, lowerLegLength, upperLegMass, lowerLegMass, footMass,
             hipJointLocalYInPelvis, kneeJointLocalYInPelvis, ankleJointLocalYInPelvis,
             angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
             hipJointStiffness, kneeJointStiffness, ankleJointStiffness,
-            hipTwist, Reverse(hipSwingY), Reverse(hipSwingZ), kneeTwist, ankleTwist, Reverse(ankleSwingY), Reverse(ankleSwingZ));
+            hipTwist, Reverse(hipSwingY), Reverse(hipSwingZ), kneeTwist, ankleTwist);
 
         // 双臂：T-pose 手臂平伸（沿 X 轴向两侧）
         CreateArm(torso.transform, "Left", -shoulderOffsetX, upperArmVisualSize, lowerArmVisualSize,
@@ -548,9 +545,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         Vector2 hipSwingY,
         Vector2 hipSwingZ,
         Vector2 kneeTwist,
-        Vector2 ankleTwist,
-        Vector2 ankleSwingY,
-        Vector2 ankleSwingZ)
+        Vector2 ankleTwist)
     {
         // 髋关节节点（使用球形关节，支持三个轴向旋转）
         var hipJoint = CreateJointNode(
@@ -618,12 +613,8 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             jointFriction: jointFriction,
             driveStiffness: ankleStiffness * globalScale,
             driveForceLimit: driveForceLimit,
-            lowerLimitRad: 0f,
-            upperLimitRad: 0f,
-            useSphericalJoint: true,
-            swingLimit: ankleSwingY,
-            swingZLimit: ankleSwingZ,
-            twistLimit: ankleTwist
+            lowerLimitRad: ankleTwist.x,
+            upperLimitRad: ankleTwist.y
         );
 
         // 在踝关节节点下添加脚板视觉/碰撞实体
@@ -778,33 +769,54 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         {
             // Swing Y (前后摆动)
             var swingYDrive = articulation.yDrive;
-            articulation.swingYLock = ArticulationDofLock.LimitedMotion;
-            swingYDrive.lowerLimit = swingLimit.Value.x;
-            swingYDrive.upperLimit = swingLimit.Value.y;
-            swingYDrive.stiffness = driveStiffness;
-            swingYDrive.damping = angularDamping;
-            swingYDrive.forceLimit = driveForceLimit;
-            articulation.yDrive = swingYDrive;
+            if (swingLimit.Value.x == 0f && swingLimit.Value.y == 0f)
+            {
+                articulation.swingYLock = ArticulationDofLock.LockedMotion;
+            }
+            else
+            {
+                articulation.swingYLock = ArticulationDofLock.LimitedMotion;
+                swingYDrive.lowerLimit = swingLimit.Value.x;
+                swingYDrive.upperLimit = swingLimit.Value.y;
+                swingYDrive.stiffness = driveStiffness;
+                swingYDrive.damping = angularDamping;
+                swingYDrive.forceLimit = driveForceLimit;
+                articulation.yDrive = swingYDrive;
+            }
 
             // Swing Z (左右摆动)
             var swingZDrive = articulation.zDrive;
-            articulation.swingZLock = ArticulationDofLock.LimitedMotion;
-            swingZDrive.lowerLimit = swingZLimit.Value.x;
-            swingZDrive.upperLimit = swingZLimit.Value.y;
-            swingZDrive.stiffness = driveStiffness;
-            swingZDrive.damping = angularDamping;
-            swingZDrive.forceLimit = driveForceLimit;
-            articulation.zDrive = swingZDrive;
+            if (swingZLimit.Value.x == 0f && swingZLimit.Value.y == 0f)
+            {
+                articulation.swingZLock = ArticulationDofLock.LockedMotion;
+            }
+            else
+            {
+                articulation.swingZLock = ArticulationDofLock.LimitedMotion;
+                swingZDrive.lowerLimit = swingZLimit.Value.x;
+                swingZDrive.upperLimit = swingZLimit.Value.y;
+                swingZDrive.stiffness = driveStiffness;
+                swingZDrive.damping = angularDamping;
+                swingZDrive.forceLimit = driveForceLimit;
+                articulation.zDrive = swingZDrive;
+            }
 
             // Twist (扭转)
             var twistDrive = articulation.xDrive;
-            articulation.twistLock = ArticulationDofLock.LimitedMotion;
-            twistDrive.lowerLimit = twistLimit.Value.x;
-            twistDrive.upperLimit = twistLimit.Value.y;
-            twistDrive.stiffness = driveStiffness;
-            twistDrive.damping = angularDamping;
-            twistDrive.forceLimit = driveForceLimit;
-            articulation.xDrive = twistDrive;
+            if (twistLimit.Value.x == 0f && twistLimit.Value.y == 0f)
+            {
+                articulation.twistLock = ArticulationDofLock.LockedMotion;
+            }
+            else
+            {
+                articulation.twistLock = ArticulationDofLock.LimitedMotion;
+                twistDrive.lowerLimit = twistLimit.Value.x;
+                twistDrive.upperLimit = twistLimit.Value.y;
+                twistDrive.stiffness = driveStiffness;
+                twistDrive.damping = angularDamping;
+                twistDrive.forceLimit = driveForceLimit;
+                articulation.xDrive = twistDrive;
+            }
         }
         // revolute joint：直接配置 xDrive（不依赖 ArticulationDriveAxis）
         else if (configureDrive && jointType == ArticulationJointType.RevoluteJoint)
@@ -982,8 +994,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
 
         // 踝关节
         ankleTwist = new Vector2(-45f, 45f);
-        ankleSwingY = new Vector2(-15f, 15f);
-        ankleSwingZ = new Vector2(-20f, 20f);
 
         // 肩关节
         shoulderTwist = new Vector2(-180f, 180f);
@@ -1094,10 +1104,10 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         // 踝关节
         public float ankleTwist_x = -45f;
         public float ankleTwist_y = 45f;
-        public float ankleSwingY_x = -15f;
-        public float ankleSwingY_y = 15f;
-        public float ankleSwingZ_x = -20f;
-        public float ankleSwingZ_y = 20f;
+        public float ankleSwingY_x = 0f;
+        public float ankleSwingY_y = 0f;
+        public float ankleSwingZ_x = 0f;
+        public float ankleSwingZ_y = 0f;
 
         // 肩关节
         public float shoulderTwist_x = -180f;
@@ -1174,8 +1184,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
 
         // 踝关节
         ankleTwist = new Vector2(config.ankleTwist_x, config.ankleTwist_y);
-        ankleSwingY = new Vector2(config.ankleSwingY_x, config.ankleSwingY_y);
-        ankleSwingZ = new Vector2(config.ankleSwingZ_x, config.ankleSwingZ_y);
 
         // 肩关节
         shoulderTwist = new Vector2(config.shoulderTwist_x, config.shoulderTwist_y);
@@ -1264,10 +1272,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             // 踝关节
             ankleTwist_x = ankleTwist.x,
             ankleTwist_y = ankleTwist.y,
-            ankleSwingY_x = ankleSwingY.x,
-            ankleSwingY_y = ankleSwingY.y,
-            ankleSwingZ_x = ankleSwingZ.x,
-            ankleSwingZ_y = ankleSwingZ.y,
 
             // 肩关节
             shoulderTwist_x = shoulderTwist.x,

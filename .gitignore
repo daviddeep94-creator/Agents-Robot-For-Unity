@@ -3,4 +3,5 @@ Logs/
 Temp/
 /obj/Debug/
 /Build/
+/Assets/ML-Agents/
 .vs/

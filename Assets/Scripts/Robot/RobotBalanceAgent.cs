@@ -275,10 +275,25 @@ public class RobotBalanceAgent : Agent
             centerOfMassVelocity /= totalMass;
         }
         
+        if(leftFootOnGround && rightFootOnGround)
+        {
+            centerOfMass = centerOfMass - Vector3.Lerp(allJoints[leftAnkleIndex].transform.position, allJoints[rightAnkleIndex].transform.position, 0.5f);
+        }
+        else if (leftFootOnGround)
+        {
+            centerOfMass = centerOfMass - allJoints[leftAnkleIndex].transform.position;
+        }
+        else if (rightFootOnGround)
+        {
+            centerOfMass = centerOfMass - allJoints[rightAnkleIndex].transform.position;
+        }
+        //计算局部重心
+        centerOfMass = body.transform.InverseTransformPoint(centerOfMass);
         // 1. 机器人整体重心
         sensor.AddObservation(centerOfMass);
         dimensionality += 3;
-
+        //计算局部速度
+        centerOfMassVelocity = body.transform.InverseTransformVector(centerOfMassVelocity);
         // 2. 机器人整体速度
         sensor.AddObservation(centerOfMassVelocity);
         dimensionality += 3;
@@ -294,6 +309,9 @@ public class RobotBalanceAgent : Agent
         sensor.AddObservation(allJoints[rightAnkleIndex].transform.up);
         dimensionality += 6;
 
+        sensor.AddObservation(body.transform.InverseTransformPoint(allJoints[leftAnkleIndex].transform.position));
+        sensor.AddObservation(body.transform.InverseTransformPoint(allJoints[rightAnkleIndex].transform.position));
+        dimensionality += 6;
         // 6. 各关节局部旋转12*3=36
         foreach (var joint in allJoints)
         {
@@ -312,8 +330,8 @@ public class RobotBalanceAgent : Agent
         sensor.AddObservation(target.position-body.transform.position);
         dimensionality += 4;
 
-        //Debug.Log($"总维度:{dimensionality}");
-        // 总观测维度: 12(根位置) + 6(踝关节上向量) + 12*3(关节局部旋转) + 1(Ground) + 1(targetType) + 3(target)= 59
+        Debug.Log($"总维度:{dimensionality}");
+        // 总观测维度: 12(根位置) + 6(踝关节上向量)+ 6(踝关节相对位置) + 12*3(关节局部旋转) + 1(Ground) + 1(targetType) + 3(target)= 65
     }
 
     public override void OnActionReceived(ActionBuffers actions)
@@ -487,8 +505,8 @@ public class RobotBalanceAgent : Agent
         float footReward = 0;
         if (leftFootOnGround) footReward += 0.005f;
         if (rightFootOnGround) footReward += 0.005f;
-        footReward += ((Vector3.Dot(allJoints[leftAnkleIndex].transform.up, Vector3.up)) - 0.5f) * 0.02f;
-        footReward += ((Vector3.Dot(allJoints[rightAnkleIndex].transform.up, Vector3.up)) - 0.5f) * 0.02f;
+        footReward += ((Vector3.Dot(allJoints[leftAnkleIndex].transform.up, Vector3.up)) - 0.8f) * 0.04f;
+        footReward += ((Vector3.Dot(allJoints[rightAnkleIndex].transform.up, Vector3.up)) - 0.8f) * 0.04f;
         AddReward(footReward);
 
         // ===== 5. 动作平滑（防抖）=====

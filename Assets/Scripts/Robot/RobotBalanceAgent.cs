@@ -32,15 +32,11 @@ public class RobotBalanceAgent : Agent
 
     [Tooltip("锁定身体上半部分")]
     [SerializeField] private bool lockBodyUp = true;
-    //[Header("奖励配置")]
-    //[Tooltip("每帧保持直立的基础奖励")]
-    //[SerializeField] private float uprightReward = 0.01f;
-
-    //[Tooltip("倾斜惩罚系数")]
-    //[SerializeField] private float tiltPenaltyMultiplier = 0.1f;
-
-    //[Tooltip("最终完成奖励")]
-    //[SerializeField] private float completionReward = 1f;
+    // ===== 防抖相关 =====
+    private float[] lastActions;
+    private float actionSmoothPenalty = 0.05f;     // 动作变化惩罚
+    private float angularVelocityPenalty = 0.02f;  // 整体角速度惩罚
+    private float jointVelocityPenalty = 0.001f;   // 关节速度惩罚
 
     [Header("调试")]
     [SerializeField] private bool showDebugInfo = true;
@@ -187,7 +183,9 @@ public class RobotBalanceAgent : Agent
     {
         //Debug.Log($"[RobotBalanceAgent] ========== OnEpisodeBegin 被调用 ==========");
         episodeTimer = 0f;
-
+        // 初始化 action buffer
+        int actionSize = GetComponent<BehaviorParameters>().BrainParameters.ActionSpec.NumContinuousActions;
+        lastActions = new float[actionSize];
         // 重置机器人姿态到初始状态
         ResetRobotPose();
     }
@@ -347,7 +345,8 @@ public class RobotBalanceAgent : Agent
 
         // 应用关节力矩（12个连续动作对应12个关节）26d
         ApplyJointForces(actions.ContinuousActions);
-
+        //防抖
+        ApplyStabilityPenalty(actions.ContinuousActions);
         // 计算奖励
         CalculateAndApplyReward();
 
@@ -375,9 +374,9 @@ public class RobotBalanceAgent : Agent
         {
             ApplyForceToJoint(allJoints[leftKneeIndex], actions[index++], 0, 0);
         }
-        if (leftAnkleIndex >= 0)  // 踝关节（1轴）
+        if (leftAnkleIndex >= 0)  // 踝关节（2轴）
         {
-            ApplyForceToJoint(allJoints[leftAnkleIndex], actions[index++], 0, 0);
+            ApplyForceToJoint(allJoints[leftAnkleIndex], actions[index++], 0, actions[index++]);
         }
 
         // 右腿
@@ -389,9 +388,9 @@ public class RobotBalanceAgent : Agent
         {
             ApplyForceToJoint(allJoints[rightKneeIndex], actions[index++], 0, 0);
         }
-        if (rightAnkleIndex >= 0)  // 踝关节（1轴）
+        if (rightAnkleIndex >= 0)  // 踝关节（2轴）
         {
-            ApplyForceToJoint(allJoints[rightAnkleIndex], actions[index++], 0, 0);
+            ApplyForceToJoint(allJoints[rightAnkleIndex], actions[index++], 0, actions[index++]);
         }
 
         if(!lockBodyUp)
@@ -426,7 +425,7 @@ public class RobotBalanceAgent : Agent
                 ApplyForceToJoint(allJoints[neckIndex], actions[index++], actions[index++], 0);
             }
         }
-        //一共22轴
+        //一共24轴
     }
 
     /// <summary>
@@ -456,7 +455,35 @@ public class RobotBalanceAgent : Agent
             joint.zDrive = zDrive;
         }
     }
+    private void ApplyStabilityPenalty(ActionSegment<float> actions)
+    {
+        // ===== 1. 动作变化惩罚（最关键）=====
+        float actionDelta = 0f;
+        for (int i = 0; i < actions.Length; i++)
+        {
+            float diff = actions[i] - lastActions[i];
+            actionDelta += diff * diff;
 
+            // 保存当前动作
+            lastActions[i] = actions[i];
+        }
+        AddReward(-actionDelta * actionSmoothPenalty);
+
+        // ===== 2. 整体角速度惩罚 =====
+        Vector3 angularVel = robotRoot.angularVelocity;
+        AddReward(-angularVel.sqrMagnitude * angularVelocityPenalty);
+
+        // ===== 3. 关节速度惩罚 =====
+        float jointVelSum = 0f;
+        foreach (var joint in allJoints)
+        {
+            if (joint != null)
+            {
+                jointVelSum += joint.angularVelocity.sqrMagnitude;
+            }
+        }
+        AddReward(-jointVelSum * jointVelocityPenalty);
+    }
     /// <summary>
     /// 计算并应用奖励
     /// </summary>
@@ -508,19 +535,6 @@ public class RobotBalanceAgent : Agent
         footReward += ((Vector3.Dot(allJoints[leftAnkleIndex].transform.up, Vector3.up)) - 0.8f) * 0.04f;
         footReward += ((Vector3.Dot(allJoints[rightAnkleIndex].transform.up, Vector3.up)) - 0.8f) * 0.04f;
         AddReward(footReward);
-
-        // ===== 5. 动作平滑（防抖）=====
-        //float movementPenalty = 0f;
-        //float[] currentAngles = GetJointAngles();
-
-        //for (int i = 0; i < currentAngles.Length; i++)
-        //{
-        //    movementPenalty += Mathf.Abs(currentAngles[i] - previousJointAngles[i]);
-        //}
-
-        //previousJointAngles = currentAngles;
-
-        //AddReward(-movementPenalty * 0.0005f);
     }
 
     /// <summary>

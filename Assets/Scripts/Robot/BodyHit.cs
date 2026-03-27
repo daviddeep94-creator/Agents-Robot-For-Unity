@@ -10,7 +10,7 @@ public class BodyHit : MonoBehaviour
     {
         agent = GetComponentInParent<RobotBalanceAgent>();
     }
-    public void OnCollisionStay(Collision collision)
+    private void OnCollisionStay(Collision collision)
     {
         if (collision.gameObject.layer == 3)
         {

@@ -856,7 +856,10 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             zDrive.upperLimit = 0;
             articulation.zDrive = zDrive;
         }
-
+        if (!go.TryGetComponent(out BodyHit hit))
+        {
+            go.AddComponent<BodyHit>();
+        }
         return articulation;
     }
 
@@ -885,12 +888,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         // 实体不需要 ArticulationBody，只需要 Collider
         var articulation = go.GetComponent<ArticulationBody>();
         DestroyImmediate(articulation);
-
-        if (!go.TryGetComponent(out BodyHit hit))
-        {
-            go.AddComponent<BodyHit>();
-        }
-
     }
 
     /// <summary>

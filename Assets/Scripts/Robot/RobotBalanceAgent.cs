@@ -9,6 +9,7 @@ public enum TargetType
 {
     None=0,
     BalancePoint=1,
+    Move,
 }
 /// <summary>
 /// 机器人站立平衡训练Agent
@@ -49,7 +50,7 @@ public class RobotBalanceAgent : Agent
 
     [Header("目标")]
     [SerializeField] private Transform target;
-
+    Vector3 targetOriginPos;
     [Header("目标类型")]
     [SerializeField] private TargetType targetType = TargetType.BalancePoint;
     // 状态变量
@@ -94,6 +95,7 @@ public class RobotBalanceAgent : Agent
         {
             target = new GameObject("Target").transform;
         }
+        targetOriginPos = target.position;
     }
 
     private void Start()
@@ -194,6 +196,15 @@ public class RobotBalanceAgent : Agent
         lastActions = new float[actionSize];
         // 重置机器人姿态到初始状态
         ResetRobotPose();
+
+        if (targetType == TargetType.BalancePoint)
+        {
+            target.position = targetOriginPos + new Vector3(Random.Range(-0.5f, 0.5f), 0f, Random.Range(-0.5f, 0.5f));
+        }
+        else if (targetType == TargetType.Move)
+        {
+            target.position = new Vector3(Random.Range(-10, 10), 0f, Random.Range(-10, 10));
+        }
     }
 
     /// <summary>
@@ -278,19 +289,8 @@ public class RobotBalanceAgent : Agent
         Vector3 centerOfMassVelocity = Vector3.zero;
         float totalMass = 0f;
 
-        Vector3 supportPoint = body.transform.position;
-        if (leftFootOnGround && rightFootOnGround)
-        {
-            supportPoint = Vector3.Lerp(allJoints[leftAnkleIndex].transform.position, allJoints[rightAnkleIndex].transform.position, 0.5f);
-        }
-        else if (leftFootOnGround)
-        {
-            supportPoint = allJoints[leftAnkleIndex].transform.position;
-        }
-        else if (rightFootOnGround)
-        {
-            supportPoint = allJoints[rightAnkleIndex].transform.position;
-        }
+        Vector3 supportPoint = supportPoint = Vector3.Lerp(allJoints[leftAnkleIndex].transform.position, allJoints[rightAnkleIndex].transform.position, 0.5f);
+        
         foreach (var joint in allJoints)
         {
             if (joint != null)
@@ -522,11 +522,15 @@ public class RobotBalanceAgent : Agent
             case TargetType.BalancePoint:
                 Ballance();
                 break;
+            case TargetType.Move:
+                Ballance();
+                Move();
+                break;
             default:
                 break;
         }
     }
-
+    float onTargetTime;
     public void Ballance()
     {
         // ===== 1. 获取核心状态 =====
@@ -540,9 +544,15 @@ public class RobotBalanceAgent : Agent
         float upright = Mathf.Clamp01(1f - currentTiltAngle / maxTiltAngle); // 越直越接近1
         AddReward(upright * 0.02f);
 
+        float bodyCurrentTiltAngle = Vector3.Angle(allJoints[torsoIndex].transform.up, pelvisPos.up); // 0 ~ 180
+        float bodyUpright = Mathf.Clamp01(1f - bodyCurrentTiltAngle / maxTiltAngle); // 越直越接近1
+        AddReward(bodyUpright * 0.02f);
+
+
         // ===== 3. 目标距离奖励（防止蹲着）=====
-        currentDis = pelvisPos.position - target.transform.position;
-        float heightReward = Mathf.Exp(-currentDis.magnitude * 5f);
+        currentDis = target.transform.position - pelvisPos.position;
+        float targetDis=currentDis.magnitude;
+        float heightReward = Mathf.Exp(-targetDis * 5f);
         AddReward(heightReward * 0.01f);
 
         // ===== 4. Ground 接触（关键新增）=====
@@ -566,8 +576,38 @@ public class RobotBalanceAgent : Agent
 
         // 计算两只脚Z方向差值，越接近0表示方向越平行
         float footParallel = Mathf.Abs(leftFooLocal.z-rightFootlocal.z);
-        footReward += (0.5f-footParallel ) * 0.005f; // 鼓励平行，惩罚前后分开
+        footReward += (0.5f-footParallel ) * 0.001f; // 鼓励平行，惩罚前后分开
         AddReward(footReward);
+
+        if (targetDis < 0.05f)
+        {
+            onTargetTime += Time.fixedDeltaTime;
+        }
+        else
+        {
+            onTargetTime = 0;
+        }
+
+        if (targetType == TargetType.BalancePoint)
+        {
+            if (onTargetTime > 10)
+            {
+                targetType = TargetType.Move;
+                onTargetTime = 0;
+            }
+        }
+    }
+
+    public void Move()
+    {
+        // ===== 1. 获取核心状态 =====
+        Transform pelvisPos = allJoints[pelvisIndex].transform;
+        if (currentDis.magnitude > 0.5)
+        {
+            //面向目标加分，否则扣分
+            float Reward = Vector3.Dot(currentDis.normalized, pelvisPos.forward);
+            AddReward(Reward * 0.02f);
+        }
     }
 
     /// <summary>
@@ -586,32 +626,34 @@ public class RobotBalanceAgent : Agent
             //Debug.Log($"中止，倒地");
             return;
         }
-
-        // 倾斜过大
-        if (currentTiltAngle > maxTiltAngle)
+        if (targetType == TargetType.BalancePoint)
         {
-            AddReward(-0.5f);
-            EndEpisode();
-            //Debug.Log($"中止，倾斜过大{currentTiltAngle}");
-            return;
-        }
+            // 倾斜过大
+            if (currentTiltAngle > maxTiltAngle)
+            {
+                AddReward(-0.5f);
+                EndEpisode();
+                //Debug.Log($"中止，倾斜过大{currentTiltAngle}");
+                return;
+            }
 
-        // 高度误差过大
-        if (Mathf.Abs(currentDis.y) > targetHeightDiff)
-        {
-            AddReward(-0.5f);
-            EndEpisode();
-            //Debug.Log($"中止，高度{currentHeight}超过阈值{targetHeightDiff}");
-            return;
-        }
+            // 高度误差过大
+            if (Mathf.Abs(currentDis.y) > targetHeightDiff)
+            {
+                AddReward(-0.5f);
+                EndEpisode();
+                //Debug.Log($"中止，高度{currentHeight}超过阈值{targetHeightDiff}");
+                return;
+            }
 
-        // 距离误差过大
-        if (Mathf.Max(Mathf.Abs(currentDis.x), Mathf.Abs(currentDis.z)) > targetHeightDiff)
-        {
-            AddReward(-0.5f);
-            EndEpisode();
-            //Debug.Log($"中止，高度{currentHeight}超过阈值{targetHeightDiff}");
-            return;
+            // 距离误差过大
+            if (Mathf.Max(Mathf.Abs(currentDis.x), Mathf.Abs(currentDis.z)) > targetHeightDiff)
+            {
+                AddReward(-0.5f);
+                EndEpisode();
+                //Debug.Log($"中止，高度{currentHeight}超过阈值{targetHeightDiff}");
+                return;
+            }
         }
     }
 

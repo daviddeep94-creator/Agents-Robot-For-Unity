@@ -392,7 +392,11 @@ public class RobotBalanceAgent : Agent
         {
             ApplyForceToJoint(allJoints[rightAnkleIndex], actions[index++], 0, actions[index++]);
         }
-
+        // 身体（2轴）
+        if (torsoIndex >= 0)
+        {
+            ApplyForceToJoint(allJoints[torsoIndex], actions[index++], 0, actions[index++]);
+        }
         if(!lockBodyUp)
         {
                     // 左臂
@@ -412,11 +416,6 @@ public class RobotBalanceAgent : Agent
             if (rightElbowIndex >= 0)  // 肘关节（1轴）
             {
                 ApplyForceToJoint(allJoints[rightElbowIndex], actions[index++], 0, 0);
-            }
-            // 身体（2轴）
-            if (torsoIndex >= 0)
-            {
-                ApplyForceToJoint(allJoints[torsoIndex], actions[index++], 0, actions[index++]);
             }
 
             // 脖子（2轴）
@@ -534,6 +533,15 @@ public class RobotBalanceAgent : Agent
         if (rightFootOnGround) footReward += 0.005f;
         footReward += ((Vector3.Dot(allJoints[leftAnkleIndex].transform.up, Vector3.up)) - 0.8f) * 0.04f;
         footReward += ((Vector3.Dot(allJoints[rightAnkleIndex].transform.up, Vector3.up)) - 0.8f) * 0.04f;
+
+        // ===== 5. 惩罚双脚不平行的姿态 =====
+        // 计算两只脚的局部位置
+        Vector3 leftFooLocal = pelvisPos.InverseTransformPoint(allJoints[leftAnkleIndex].transform.position);
+        Vector3 rightFootlocal = pelvisPos.InverseTransformPoint(allJoints[rightAnkleIndex].transform.position);
+
+        // 计算两只脚Z方向差值，越接近0表示方向越平行
+        float footParallel = Mathf.Abs(leftFooLocal.z-rightFootlocal.z);
+        footReward += (0.5f-footParallel ) * 0.01f; // 鼓励平行，惩罚前后分开
         AddReward(footReward);
     }
 

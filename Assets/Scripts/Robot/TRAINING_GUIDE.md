@@ -119,6 +119,7 @@ mlagents-learn "E:\Agents-Robot-For-Unity\Assets\ML-Agents\training_config.yaml"
 --results-dir="E:\Agents-Robot-For-Unity\Assets\ML-Agents\MLModels" `
 --time-scale=20 `
 --num-envs=15 `
+--no-graphics `
 --resume 
 # 训练完成后查看结果
 tensorboard --logdir=results

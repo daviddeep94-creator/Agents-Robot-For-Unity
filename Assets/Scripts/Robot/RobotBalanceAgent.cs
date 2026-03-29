@@ -30,7 +30,8 @@ public class RobotBalanceAgent : Agent
 
     [Tooltip("机器人目标距离误差")]
     [SerializeField] private float targetDisDiff = 1;
-
+    [Tooltip("机器人速度影响")]
+    [SerializeField] private float velocityImpact = 0.1f;
     [Tooltip("最大允许的倾斜角度（度）")]
     [SerializeField] private float maxTiltAngle = 30f;
 
@@ -38,9 +39,14 @@ public class RobotBalanceAgent : Agent
     [SerializeField] private bool lockBodyUp = true;
     // ===== 防抖相关 =====
     private float[] lastActions;
-    private float actionSmoothPenalty = 0.05f;     // 动作变化惩罚
-    private float angularVelocityPenalty = 0.02f;  // 整体角速度惩罚
-    private float jointVelocityPenalty = 0.001f;   // 关节速度惩罚
+    private float actionSmoothPenalty = 0.2f;     // 动作变化惩罚
+    private float angularVelocityPenalty = 0.1f;  // 整体角速度惩罚
+    private float jointVelocityPenalty = 0.005f;   // 关节速度惩罚
+
+    // ===== 重置相关 =====
+    [Header("重置相关")]
+    [Tooltip("重置时给一个随机倾斜角度")]
+    [SerializeField] private float rangeTilt = 5;
 
     [Header("调试")]
     [SerializeField] private bool showDebugInfo = true;
@@ -55,7 +61,8 @@ public class RobotBalanceAgent : Agent
     [SerializeField] private TargetType targetType = TargetType.BalancePoint;
     // 状态变量
     private float episodeTimer;
-    private Vector3 currentDis;
+    private Vector3 targetDri;
+    private float targetDis;
     private float currentTiltAngle;
 
     private ArticulationBody[] allJoints;
@@ -191,19 +198,22 @@ public class RobotBalanceAgent : Agent
     {
         //Debug.Log($"[RobotBalanceAgent] ========== OnEpisodeBegin 被调用 ==========");
         episodeTimer = 0f;
+        onTargetTime = 0;
         // 初始化 action buffer
         int actionSize = GetComponent<BehaviorParameters>().BrainParameters.ActionSpec.NumContinuousActions;
         lastActions = new float[actionSize];
+
         // 重置机器人姿态到初始状态
         ResetRobotPose();
 
         if (targetType == TargetType.BalancePoint)
         {
-            target.position = targetOriginPos + new Vector3(Random.Range(-0.5f, 0.5f), 0f, Random.Range(-0.5f, 0.5f));
+            allJoints[pelvisIndex].TeleportRoot(allJoints[pelvisIndex].transform.position, Quaternion.Euler(Random.Range(-1f, 1f) * rangeTilt, 0, Random.Range(-1f, 1f) * rangeTilt));
         }
-        else if (targetType == TargetType.Move)
+
+        if (targetType == TargetType.Move)
         {
-            target.position = new Vector3(Random.Range(-10, 10), 0f, Random.Range(-10, 10));
+            target.position = new Vector3(Random.Range(-10, 10), target.position.y, Random.Range(-10, 10));
         }
     }
 
@@ -224,17 +234,34 @@ public class RobotBalanceAgent : Agent
     }
 
     bool leftFootOnGround, rightFootOnGround;
+    Vector3 leftFeetPoint, rightFeetPoint;
     bool pelvisOnGround, torsoOnGround;
-    public void BodyHit(string name)
+    public void BodyHit(string name, Collision collision)
     {
         Debug.Log($"[RobotBalanceAgent] BodyHit: {name}");
         switch (name)
         {
             case "Left_AnkleJoint":
                 leftFootOnGround = true;
+                leftFeetPoint = Vector3.zero;
+                int num = 0;
+                foreach (var item in collision.contacts)
+                {
+                    leftFeetPoint += item.point;
+                    num++;
+                }
+                leftFeetPoint /= num;
                 break;
             case "Right_AnkleJoint":
                 rightFootOnGround = true;
+                rightFeetPoint = Vector3.zero;
+                num = 0;
+                foreach (var item in collision.contacts)
+                {
+                    rightFeetPoint += item.point;
+                    num++;
+                }
+                rightFeetPoint /= num;
                 break;
             case "Pelvis_Joint":
                 pelvisOnGround = true;
@@ -253,7 +280,9 @@ public class RobotBalanceAgent : Agent
         pelvisOnGround = false;
         torsoOnGround = false;
     }
-    Vector3 centerOfMass;
+    Vector3 worldCenterOfMass;
+    Vector3 worldCenterOfMassVelocity;
+    float bodyUpAngle;
     public override void CollectObservations(VectorSensor sensor)
     {
         if (robotRoot == null || allJoints == null || allJoints.Length == 0)
@@ -262,101 +291,125 @@ public class RobotBalanceAgent : Agent
             return;
         }
 
-        int Ground = 0;
-        if (leftFootOnGround)
-        {
-            Ground += 1;
-            Debug.Log("leftFootOnGround");
-        }
-        if (rightFootOnGround)
-        {
-            Ground += 2;
-            Debug.Log("rightFootOnGround");
-        }
-        if (pelvisOnGround)
-        {
-            Ground += 4;
-        }
-        if(torsoOnGround)
-        {
-            Ground += 8;
-        }
-
         int dimensionality = 0;
         ArticulationBody body = allJoints[pelvisIndex];
         // 计算机器人整体重心和整体速度
-        centerOfMass = Vector3.zero;
-        Vector3 centerOfMassVelocity = Vector3.zero;
+        worldCenterOfMass = Vector3.zero;
+        worldCenterOfMassVelocity = Vector3.zero;
         float totalMass = 0f;
 
-        Vector3 supportPoint = supportPoint = Vector3.Lerp(allJoints[leftAnkleIndex].transform.position, allJoints[rightAnkleIndex].transform.position, 0.5f);
-        
+        Vector3 supportPoint = body.transform.position;
+
         foreach (var joint in allJoints)
         {
             if (joint != null)
             {
                 float mass = joint.mass;
-                centerOfMass += (joint.worldCenterOfMass - supportPoint) * mass;
-                centerOfMassVelocity += joint.velocity * mass;
+                worldCenterOfMass += joint.worldCenterOfMass * mass;
+                worldCenterOfMassVelocity += joint.velocity * mass;
                 totalMass += mass;
             }
         }
 
         if (totalMass > 0)
         {
-            centerOfMass /= totalMass;
-            centerOfMassVelocity /= totalMass;
+            worldCenterOfMass /= totalMass;
+            worldCenterOfMassVelocity /= totalMass;
         }
-        Debug.DrawLine(supportPoint, supportPoint + centerOfMass, Color.red);
-        
-        //计算局部重心
-        Vector3 localCenterOfMass = body.transform.InverseTransformPoint(centerOfMass);
-       
+        Debug.DrawLine(supportPoint, worldCenterOfMass, Color.red);
+
+
         // 1. 机器人整体重心
-        sensor.AddObservation(localCenterOfMass);
+        sensor.AddObservation(body.transform.InverseTransformPoint(worldCenterOfMass));
         dimensionality += 3;
-        //计算局部速度
-        centerOfMassVelocity = body.transform.InverseTransformVector(centerOfMassVelocity);
+
         // 2. 机器人整体速度
-        sensor.AddObservation(centerOfMassVelocity);
+        sensor.AddObservation(body.transform.InverseTransformVector(worldCenterOfMassVelocity));
         dimensionality += 3;
 
         // 3. 机器人根节点世界旋转
-        sensor.AddObservation(body.transform.rotation.eulerAngles);
-        dimensionality += 3;
-        // 4. 机器人根节点上向量
-        sensor.AddObservation(body.transform.up);
-        dimensionality += 3;
-        // 5. 踝关节上向量
-        sensor.AddObservation(allJoints[leftAnkleIndex].transform.up);
-        sensor.AddObservation(allJoints[rightAnkleIndex].transform.up);
-        dimensionality += 6;
+        sensor.AddObservation(body.transform.rotation);
+        dimensionality += 4;
 
-        sensor.AddObservation(body.transform.InverseTransformPoint(allJoints[leftAnkleIndex].transform.position));
-        sensor.AddObservation(body.transform.InverseTransformPoint(allJoints[rightAnkleIndex].transform.position));
+        // 4. 机器人根节点角速度
+        sensor.AddObservation(body.transform.InverseTransformVector(body.angularVelocity));
+        dimensionality += 3;
+
+        Vector3 leftFeet = leftFeetPoint == Vector3.zero ? allJoints[leftAnkleIndex].transform.position : leftFeetPoint;
+        Vector3 rightFeet = rightFeetPoint == Vector3.zero ? allJoints[rightAnkleIndex].transform.position : rightFeetPoint;
+        sensor.AddObservation(body.transform.InverseTransformPoint(leftFeet));
+        sensor.AddObservation(body.transform.InverseTransformPoint(rightFeet));
         dimensionality += 6;
-        // 6. 各关节局部旋转12*3=36
+        // 6. 各关节局部旋转
         foreach (var joint in allJoints)
         {
             if (joint == body) continue;
             if (joint != null && joint.jointType != ArticulationJointType.FixedJoint)
             {
-                sensor.AddObservation(joint.transform.localRotation.eulerAngles);
+                if (joint.jointType == ArticulationJointType.RevoluteJoint)
+                {
+                    sensor.AddObservation(NormalizeAngle(joint.transform.localRotation.eulerAngles.x));
+                    dimensionality += 1;
+                }
+                else if (joint.jointType == ArticulationJointType.SphericalJoint)
+                {
+                    if (joint.xDrive.lowerLimit != 0 || joint.xDrive.upperLimit != 0)
+                    {
+                        sensor.AddObservation(NormalizeAngle(joint.transform.localRotation.eulerAngles.x));
+                        dimensionality += 1;
+                    }
+                    if (joint.yDrive.lowerLimit != 0 || joint.yDrive.upperLimit != 0)
+                    {
+                        sensor.AddObservation(NormalizeAngle(joint.transform.localRotation.eulerAngles.y));
+                        dimensionality += 1;
+                    }
+                    if (joint.zDrive.lowerLimit != 0 || joint.zDrive.upperLimit != 0)
+                    {
+                        sensor.AddObservation(NormalizeAngle(joint.transform.localRotation.eulerAngles.z));
+                        dimensionality += 1;
+                    }
+                }
+
+                sensor.AddObservation(joint.transform.parent.InverseTransformVector(joint.angularVelocity));
                 dimensionality += 3;
             }
         }
 
-        sensor.AddObservation(Ground);
+        sensor.AddObservation(leftFootOnGround);
+        dimensionality += 1;
+        sensor.AddObservation(rightFootOnGround);
         dimensionality += 1;
 
         sensor.AddObservation((int)targetType);
-        sensor.AddObservation(target.position-body.transform.position);
+        sensor.AddObservation(body.transform.InverseTransformPoint(target.transform.position) * 0.1f);
         dimensionality += 4;
-
+#if UNITY_EDITOR
         Debug.Log($"总维度:{dimensionality}");
-        // 总观测维度: 12(根位置) + 6(踝关节上向量)+ 6(踝关节相对位置) + 12*3(关节局部旋转) + 1(Ground) + 1(targetType) + 3(target)= 65
+#endif
     }
 
+    public static float NormalizeAngle(float angle)
+    {
+        return NormalizeAngle180(angle) / 180;// 先映射到 [-1,1)
+    }
+    /// <summary>
+    /// 将角度归一化到 [-180, 180) 区间
+    /// </summary>
+    public static float NormalizeAngle180(float angle)
+    {
+        angle = NormalizeAngle360(angle); // 先映射到 [0,360)
+        if (angle >= 180f) angle -= 360f;
+        return angle;
+    }
+    /// <summary>
+    /// 将角度归一化到 [0, 360) 区间
+    /// </summary>
+    public static float NormalizeAngle360(float angle)
+    {
+        angle %= 360f;
+        if (angle < 0) angle += 360f;
+        return angle;
+    }
     public override void OnActionReceived(ActionBuffers actions)
     {
         if (robotRoot == null)
@@ -417,14 +470,15 @@ public class RobotBalanceAgent : Agent
         {
             ApplyForceToJoint(allJoints[rightAnkleIndex], actions[index++], 0, actions[index++]);
         }
-        // 身体（2轴）
-        if (torsoIndex >= 0)
-        {
-            ApplyForceToJoint(allJoints[torsoIndex], actions[index++], 0, actions[index++]);
-        }
+
         if(!lockBodyUp)
         {
-                    // 左臂
+            // 身体（2轴）
+            if (torsoIndex >= 0)
+            {
+                ApplyForceToJoint(allJoints[torsoIndex], actions[index++], 0, actions[index++]);
+            }
+            // 左臂
             if (leftShoulderIndex >= 0)  // 肩关节（3轴）
             {
                 ApplyForceToJoint(allJoints[leftShoulderIndex], actions[index++], actions[index++], actions[index++]);
@@ -506,7 +560,9 @@ public class RobotBalanceAgent : Agent
                 jointVelSum += joint.angularVelocity.sqrMagnitude;
             }
         }
+        
         AddReward(-jointVelSum * jointVelocityPenalty);
+        Debug.Log("防抖扣分" + -jointVelSum * jointVelocityPenalty);
     }
     /// <summary>
     /// 计算并应用奖励
@@ -531,54 +587,55 @@ public class RobotBalanceAgent : Agent
         }
     }
     float onTargetTime;
+
     public void Ballance()
     {
         // ===== 1. 获取核心状态 =====
-        Transform pelvisPos = allJoints[pelvisIndex].transform;
+        ArticulationBody pelvisPos = allJoints[pelvisIndex];
 
-        // Transform body = (torsoIndex >= 0) ? allJoints[torsoIndex].transform : robotRoot.transform;
+        Vector3 leftFeet = leftFeetPoint == Vector3.zero ? allJoints[leftAnkleIndex].transform.position : leftFeetPoint;
+        Vector3 rightFeet = rightFeetPoint == Vector3.zero ? allJoints[rightAnkleIndex].transform.position : rightFeetPoint;
+        //平衡核心计算
+        float reward;
+        Vector2 support1 = new Vector2(leftFeet.x, leftFeet.z);
+        Vector2 support2 = new Vector2(rightFeet.x, rightFeet.z);
+        Vector2 center = new Vector2(worldCenterOfMass.x, worldCenterOfMass.z);
+        Vector2 velocity = new Vector2(pelvisPos.velocity.x, pelvisPos.velocity.z) * Time.fixedDeltaTime * velocityImpact;
+        float centerToSupportDistance = PointToSegmentDistance(center + velocity, support1, support2);
+        //重心离中心点越远越扣分
+        reward = -centerToSupportDistance;
+        Debug.Log("重心距离得分" + reward);
 
-        currentTiltAngle = Vector3.Angle(pelvisPos.up, Vector3.up); // 0 ~ 180
+        //身体倾斜角度
+        float bodyUpright = Vector3.Angle(pelvisPos.transform.up, Vector3.up);
+        reward -= bodyUpright * 0.1f;
+        if (bodyUpright < 10)
+        {
+            reward += (1 - (bodyUpright / 10)) * 0.1f;
+        }
+        // =====  高度奖励（防止蹲着）=====
+        targetDri = target.position - pelvisPos.transform.position;
+        targetDis = targetDri.magnitude;
+        float heightDiff = Mathf.Abs(targetDri.y) / 0.3f;
+        reward += -heightDiff * 0.01f;
 
-        // ===== 2. 基础站立奖励（核心）=====
-        float upright = Mathf.Clamp01(1f - currentTiltAngle / maxTiltAngle); // 越直越接近1
-        AddReward(upright * 0.02f);
-
-        float bodyCurrentTiltAngle = Vector3.Angle(allJoints[torsoIndex].transform.up, pelvisPos.up); // 0 ~ 180
-        float bodyUpright = Mathf.Clamp01(1f - bodyCurrentTiltAngle / maxTiltAngle); // 越直越接近1
-        AddReward(bodyUpright * 0.02f);
-
-
-        // ===== 3. 目标距离奖励（防止蹲着）=====
-        currentDis = target.transform.position - pelvisPos.position;
-        float targetDis=currentDis.magnitude;
-        float heightReward = Mathf.Exp(-targetDis * 5f);
-        AddReward(heightReward * 0.01f);
-
-        // ===== 4. Ground 接触（关键新增）=====
+        // =====  Ground 接触（关键新增）=====
         // 只允许脚接触地面
         if (pelvisOnGround || torsoOnGround)
         {
-            AddReward(-0.05f); // 强惩罚（倒地）
+            reward += -0.1f; // 强惩罚（倒地）
         }
 
-        // 鼓励双脚着地（稳定）
-        float footReward = 0;
-        //if (leftFootOnGround) footReward += 0.005f;
-        //if (rightFootOnGround) footReward += 0.005f;
-        footReward += ((Vector3.Dot(allJoints[leftAnkleIndex].transform.up, Vector3.up)) - 0.8f) * 0.04f;
-        footReward += ((Vector3.Dot(allJoints[rightAnkleIndex].transform.up, Vector3.up)) - 0.8f) * 0.04f;
+        // 禁止双脚离地（稳定）
+        if (!leftFootOnGround && !rightFootOnGround)
+        {
+            reward -= 0.4f;
+            Debug.Log("双脚离地" + reward);
+        }
 
-        // ===== 5. 惩罚双脚不平行的姿态 =====
-        // 计算两只脚的局部位置
-        Vector3 leftFooLocal = pelvisPos.InverseTransformPoint(allJoints[leftAnkleIndex].transform.position);
-        Vector3 rightFootlocal = pelvisPos.InverseTransformPoint(allJoints[rightAnkleIndex].transform.position);
-
-        // 计算两只脚Z方向差值，越接近0表示方向越平行
-        float footParallel = Mathf.Abs(leftFooLocal.z-rightFootlocal.z);
-        footReward += (0.5f-footParallel ) * 0.001f; // 鼓励平行，惩罚前后分开
-        AddReward(footReward);
-
+        Debug.Log("平衡得分" + reward);
+        AddReward(reward);
+        //达到训练完成的目标
         if (targetDis < 0.05f)
         {
             onTargetTime += Time.fixedDeltaTime;
@@ -590,7 +647,7 @@ public class RobotBalanceAgent : Agent
 
         if (targetType == TargetType.BalancePoint)
         {
-            if (onTargetTime > 10)
+            if (onTargetTime > 20)
             {
                 targetType = TargetType.Move;
                 onTargetTime = 0;
@@ -602,10 +659,10 @@ public class RobotBalanceAgent : Agent
     {
         // ===== 1. 获取核心状态 =====
         Transform pelvisPos = allJoints[pelvisIndex].transform;
-        if (currentDis.magnitude > 0.5)
+        if (targetDri.magnitude > 0.5)
         {
             //面向目标加分，否则扣分
-            float Reward = Vector3.Dot(currentDis.normalized, pelvisPos.forward);
+            float Reward = Vector3.Dot(targetDri.normalized, pelvisPos.forward);
             AddReward(Reward * 0.02f);
         }
     }
@@ -638,7 +695,7 @@ public class RobotBalanceAgent : Agent
             }
 
             // 高度误差过大
-            if (Mathf.Abs(currentDis.y) > targetHeightDiff)
+            if (Mathf.Abs(targetDri.y) > targetHeightDiff)
             {
                 AddReward(-0.5f);
                 EndEpisode();
@@ -647,7 +704,7 @@ public class RobotBalanceAgent : Agent
             }
 
             // 距离误差过大
-            if (Mathf.Max(Mathf.Abs(currentDis.x), Mathf.Abs(currentDis.z)) > targetHeightDiff)
+            if (Mathf.Max(Mathf.Abs(targetDri.x), Mathf.Abs(targetDri.z)) > targetDisDiff)
             {
                 AddReward(-0.5f);
                 EndEpisode();
@@ -757,24 +814,87 @@ public class RobotBalanceAgent : Agent
             }
         }
     }
+    /// <summary>
+    /// 计算点到线段的最短距离
+    /// </summary>
+    private float PointToSegmentDistance(Vector2 point, Vector2 line1, Vector2 line2)
+    {
+        return Vector2.Distance(point, PointToSegmentPoint(point, line1, line2));
+    }
+    private Vector2 PointToSegmentPoint(Vector2 point, Vector2 line1, Vector2 line2)
+    {
+        Vector2 AB = line2 - line1;
+        Vector2 AP = point - line1;
 
+        float abSqr = Vector2.Dot(AB, AB);
+
+        // 防止线段退化为一个点
+        if (abSqr == 0f)
+        {
+            return  line1;
+        }
+
+        float t = Vector2.Dot(AP, AB) / abSqr;
+
+        if (t < 0f)
+        {
+            // 最近点是 line1
+            return  line1;
+        }
+        else if (t > 1f)
+        {
+            // 最近点是 line2
+            return  line2;
+        }
+        else
+        {
+            // 投影点
+            return line1 + t * AB;
+        }
+    }
+    /// <summary>
+    /// 计算点到线段的最短距离
+    /// 高性能版，（避免 sqrt）
+    /// </summary>
+    private float PointToSegmentDistanceSqr(Vector2 point, Vector2 line1, Vector2 line2)
+    {
+        Vector2 AB = line2 - line1;
+        Vector2 AP = point - line1;
+
+        float abSqr = Vector2.Dot(AB, AB);
+
+        if (abSqr == 0f)
+        {
+            return (point - line1).sqrMagnitude;
+        }
+
+        float t = Vector2.Dot(AP, AB) / abSqr;
+        t = Mathf.Clamp01(t);
+
+        Vector2 projection = line1 + t * AB;
+        return (point - projection).sqrMagnitude;
+    }
     private void OnDrawGizmos()
     {
         if (!showDebugInfo || robotRoot == null) return;
 
-        //// 绘制目标高度线
-        //Gizmos.color = Color.green;
-        //Gizmos.DrawLine(
-        //    new Vector3(robotRoot.transform.position.x, targetHeightDiff, robotRoot.transform.position.z),
-        //    new Vector3(robotRoot.transform.position.x, targetHeightDiff + 0.1f, robotRoot.transform.position.z)
-        //);
+#if UNITY_EDITOR
+        Vector3 point1 = leftFeetPoint == Vector3.zero ? allJoints[leftAnkleIndex].transform.position : leftFeetPoint;
+        Vector3 point2 = rightFeetPoint == Vector3.zero ? allJoints[rightAnkleIndex].transform.position : rightFeetPoint;
+        point1.y = 0;
+        point2.y = 0;
+        Debug.DrawLine(point1, point2, Color.green);
 
-        //// 绘制机器人朝向
-        //Gizmos.color = Color.blue;
-        //Gizmos.DrawRay(robotRoot.transform.position, robotRoot.transform.up * 0.5f);
+        Vector3 velocityOfWorld = allJoints[pelvisIndex].velocity * Time.fixedDeltaTime * velocityImpact;
+        velocityOfWorld.y = 0;
+        Vector3 centerOfWorld = worldCenterOfMass;
+        centerOfWorld.y = 0;
+        Debug.DrawLine(centerOfWorld, centerOfWorld + velocityOfWorld, Color.blue);
 
-        //// 绘制理想朝向
-        //Gizmos.color = Color.red;
-        //Gizmos.DrawRay(robotRoot.transform.position, Vector3.up * 0.5f);
+        Vector2 closePointOfSuport2D = PointToSegmentPoint(new Vector2(centerOfWorld.x, centerOfWorld.z) + new Vector2(velocityOfWorld.x, velocityOfWorld.z), new Vector2(point1.x, point1.z), new Vector2(point2.x, point2.z));
+        Vector3 closePointOfSuport = new Vector3(closePointOfSuport2D.x, 0, closePointOfSuport2D.y);
+
+        Debug.DrawLine(centerOfWorld + velocityOfWorld, closePointOfSuport, Color.red);
+#endif
     }
 }

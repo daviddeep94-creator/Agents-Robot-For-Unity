@@ -95,10 +95,10 @@ mlagents-learn "F:\GameProject\AI Robot\Assets\ML-Agents\training_config.yaml" `
 --run-id=RobotBalanceAgent `
 --env="F:\GameProject\AI Robot\Build\AI Robot.exe" `
 --results-dir="F:\GameProject\AI Robot\Assets\ML-Agents\MLModels" `
---time-scale=30 `
+--time-scale=20 `
 --num-envs=15 `
---no-graphics `
 --base-port=6000 `
+--no-graphics `
 --resume 
 #------------家里电脑------------------
 

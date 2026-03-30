@@ -68,7 +68,7 @@ public class RobotBalanceAgent : Agent
     private ArticulationBody[] allJoints;
 
     // 关节索引映射
-    private int pelvisIndex, torsoIndex, neckIndex;
+    private int pelvisIndex, torsoIndex;
     private int leftHipIndex, rightHipIndex;
     private int leftKneeIndex, rightKneeIndex;
     private int leftAnkleIndex, rightAnkleIndex;
@@ -144,7 +144,6 @@ public class RobotBalanceAgent : Agent
         // 查找并索引各个关节
         pelvisIndex = FindJointIndex("Pelvis_Joint");
         torsoIndex = FindJointIndex("Torso_Joint");
-        neckIndex = FindJointIndex("Neck_Joint");
         leftHipIndex = FindJointIndex("Left_HipJoint");
         rightHipIndex = FindJointIndex("Right_HipJoint");
         leftKneeIndex = FindJointIndex("Left_KneeJoint");
@@ -156,7 +155,7 @@ public class RobotBalanceAgent : Agent
         leftElbowIndex = FindJointIndex("Left_ElbowJoint");
         rightElbowIndex = FindJointIndex("Right_ElbowJoint");
 
-        Debug.Log($"[RobotBalanceAgent] 关节索引: Torso={torsoIndex}, Neck={neckIndex}, L_Hip={leftHipIndex}, R_Hip={rightHipIndex}");
+        Debug.Log($"[RobotBalanceAgent] 关节索引: Torso={torsoIndex}, L_Hip={leftHipIndex}, R_Hip={rightHipIndex}");
         target.transform.position = allJoints[pelvisIndex].transform.position;
         // 保存所有关节的初始状态
         SaveInitialJointStates();
@@ -496,14 +495,8 @@ public class RobotBalanceAgent : Agent
             {
                 ApplyForceToJoint(allJoints[rightElbowIndex], actions[index++], 0, 0);
             }
-
-            // 脖子（2轴）
-            if (neckIndex >= 0)
-            {
-                ApplyForceToJoint(allJoints[neckIndex], actions[index++], actions[index++], 0);
-            }
         }
-        //一共24轴
+        //一共22轴
     }
 
     /// <summary>
@@ -736,14 +729,7 @@ public class RobotBalanceAgent : Agent
             continuousActions[index++] = Input.GetKey(KeyCode.Alpha3) ? 1f : (Input.GetKey(KeyCode.Alpha4) ? -1f : 0f);
         }
 
-        // 脖子（2轴）- index 2-3
-        if (!lockBodyUp && neckIndex >= 0)
-        {
-            continuousActions[index++] = Input.GetKey(KeyCode.W) ? 1f : (Input.GetKey(KeyCode.S) ? -1f : 0f);
-            continuousActions[index++] = Input.GetKey(KeyCode.A) ? 1f : (Input.GetKey(KeyCode.D) ? -1f : 0f);
-        }
-
-        // 左髋（3轴）- index 4-6
+        // 左髋（3轴）- index 2-4
         if (leftHipIndex >= 0)
         {
             continuousActions[index++] = Input.GetKey(KeyCode.R) ? 1f : (Input.GetKey(KeyCode.F) ? -1f : 0f);
@@ -751,19 +737,19 @@ public class RobotBalanceAgent : Agent
             continuousActions[index++] = Input.GetKey(KeyCode.Y) ? 1f : (Input.GetKey(KeyCode.H) ? -1f : 0f);
         }
 
-        // 左膝（1轴）- index 7
+        // 左膝（1轴）- index 5
         if (leftKneeIndex >= 0)
         {
             continuousActions[index++] = Input.GetKey(KeyCode.U) ? 1f : (Input.GetKey(KeyCode.J) ? -1f : 0f);
         }
 
-        // 左踝（1轴）- index 8
+        // 左踝（1轴）- index 6
         if (leftAnkleIndex >= 0)
         {
             continuousActions[index++] = Input.GetKey(KeyCode.I) ? 1f : (Input.GetKey(KeyCode.K) ? -1f : 0f);
         }
 
-        // 右髋（3轴）- index 9-11
+        // 右髋（3轴）- index 7-9
         if (rightHipIndex >= 0)
         {
             continuousActions[index++] = Input.GetKey(KeyCode.O) ? 1f : (Input.GetKey(KeyCode.L) ? -1f : 0f);
@@ -771,48 +757,46 @@ public class RobotBalanceAgent : Agent
             continuousActions[index++] = Input.GetKey(KeyCode.LeftBracket) ? 1f : (Input.GetKey(KeyCode.RightBracket) ? -1f : 0f);
         }
 
-        // 右膝（1轴）- index 12
+        // 右膝（1轴）- index 10
         if (rightKneeIndex >= 0)
         {
             continuousActions[index++] = Input.GetKey(KeyCode.Z) ? 1f : (Input.GetKey(KeyCode.X) ? -1f : 0f);
         }
 
-        // 右踝（1轴）- index 13
+        // 右踝（1轴）- index 11
         if (rightAnkleIndex >= 0)
         {
             continuousActions[index++] = Input.GetKey(KeyCode.C) ? 1f : (Input.GetKey(KeyCode.V) ? -1f : 0f);
         }
 
-        if (!lockBodyUp)
+        // 左肩（3轴）- index 12-14
+        if (leftShoulderIndex >= 0)
         {
-            // 左肩（3轴）- index 14-16
-            if (leftShoulderIndex >= 0)
-            {
-                continuousActions[index++] = Input.GetKey(KeyCode.B) ? 1f : (Input.GetKey(KeyCode.N) ? -1f : 0f);
-                continuousActions[index++] = Input.GetKey(KeyCode.M) ? 1f : (Input.GetKey(KeyCode.Comma) ? -1f : 0f);
-                continuousActions[index++] = Input.GetKey(KeyCode.Period) ? 1f : (Input.GetKey(KeyCode.Slash) ? -1f : 0f);
-            }
-
-            // 左肘（1轴）- index 17
-            if (leftElbowIndex >= 0)
-            {
-                continuousActions[index++] = Input.GetKey(KeyCode.Q) ? 1f : (Input.GetKey(KeyCode.W) ? -1f : 0f);
-            }
-
-            // 右肩（3轴）- index 18-20
-            if (rightShoulderIndex >= 0)
-            {
-                continuousActions[index++] = Input.GetKey(KeyCode.E) ? 1f : (Input.GetKey(KeyCode.R) ? -1f : 0f);
-                continuousActions[index++] = Input.GetKey(KeyCode.T) ? 1f : (Input.GetKey(KeyCode.Y) ? -1f : 0f);
-                continuousActions[index++] = Input.GetKey(KeyCode.U) ? 1f : (Input.GetKey(KeyCode.I) ? -1f : 0f);
-            }
-
-            // 右肘（1轴）- index 21
-            if (rightElbowIndex >= 0)
-            {
-                continuousActions[index++] = Input.GetKey(KeyCode.O) ? 1f : (Input.GetKey(KeyCode.P) ? -1f : 0f);
-            }
+            continuousActions[index++] = Input.GetKey(KeyCode.B) ? 1f : (Input.GetKey(KeyCode.N) ? -1f : 0f);
+            continuousActions[index++] = Input.GetKey(KeyCode.M) ? 1f : (Input.GetKey(KeyCode.Comma) ? -1f : 0f);
+            continuousActions[index++] = Input.GetKey(KeyCode.Period) ? 1f : (Input.GetKey(KeyCode.Slash) ? -1f : 0f);
         }
+
+        // 左肘（1轴）- index 15
+        if (leftElbowIndex >= 0)
+        {
+            continuousActions[index++] = Input.GetKey(KeyCode.Q) ? 1f : (Input.GetKey(KeyCode.W) ? -1f : 0f);
+        }
+
+        // 右肩（3轴）- index 16-18
+        if (rightShoulderIndex >= 0)
+        {
+            continuousActions[index++] = Input.GetKey(KeyCode.E) ? 1f : (Input.GetKey(KeyCode.R) ? -1f : 0f);
+            continuousActions[index++] = Input.GetKey(KeyCode.T) ? 1f : (Input.GetKey(KeyCode.Y) ? -1f : 0f);
+            continuousActions[index++] = Input.GetKey(KeyCode.U) ? 1f : (Input.GetKey(KeyCode.I) ? -1f : 0f);
+        }
+
+        // 右肘（1轴）- index 19
+        if (rightElbowIndex >= 0)
+        {
+            continuousActions[index++] = Input.GetKey(KeyCode.O) ? 1f : (Input.GetKey(KeyCode.P) ? -1f : 0f);
+        }
+
     }
     /// <summary>
     /// 计算点到线段的最短距离

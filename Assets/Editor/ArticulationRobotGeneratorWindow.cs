@@ -430,55 +430,8 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         // 在躯干关节节点下添加视觉/碰撞实体
         CreateVisualCollider(torso.transform, "Torso_Visual", torsoVisualSize, new Vector3(0, torsoHeight * 0.5f, 0));
 
-        // 颈部关节节点（使用球形关节）
-        ArticulationBody neck = CreateJointNode(
-            torso.transform,
-            "Neck_Joint",
-            new Vector3(0, torsoHeight, 0),
-            Quaternion.identity,
-            neckMass,
-            jointType: ArticulationJointType.RevoluteJoint,
-            isRoot: false,
-            anchorLocalPos: Vector3.zero,
-            anchorLocalRot: Quaternion.identity,
-            configureDrive: true,
-            angularDamping: angularDamping,
-            jointFriction: jointFriction,
-            driveStiffness: neckJointStiffness * globalStiffnessScale,
-            driveForceLimit: passiveJointForceLimit,
-            lowerLimitRad: 0f,
-            upperLimitRad: 0f,
-            useSphericalJoint: true,
-            swingLimit: torsoSwingY,
-            swingZLimit: torsoSwingZ,
-            twistLimit: torsoTwist
-        );
-
-        // 在颈部关节节点下添加视觉/碰撞实体
-        CreateVisualCollider(neck.transform, "Neck_Visual", neckVisualSize, new Vector3(0, neckHeight * 0.5f, 0));
-
-        // 头部关节节点
-        ArticulationBody head = CreateJointNode(
-            neck.transform,
-            "Head_Joint",
-            new Vector3(0, neckHeight, 0),
-            Quaternion.identity,
-            headMass,
-            jointType: ArticulationJointType.FixedJoint,
-            isRoot: false,
-            anchorLocalPos: Vector3.zero,
-            anchorLocalRot: Quaternion.identity,
-            configureDrive: false,
-            angularDamping: angularDamping,
-            jointFriction: jointFriction,
-            driveStiffness: 0f,
-            driveForceLimit: passiveJointForceLimit,
-            lowerLimitRad: 0f,
-            upperLimitRad: 0f
-        );
-
-        // 在头部关节节点下添加视觉/碰撞实体
-        CreateVisualCollider(head.transform, "Head_Visual", headVisualSize, new Vector3(0, headHeight * 0.5f, 0));
+        // 头部视觉实体（直接作为躯干的一部分）
+        CreateVisualCollider(torso.transform, "Head_Visual", headVisualSize, new Vector3(0, torsoHeight + headHeight * 0.5f, 0));
 
         // 肩关节高度（在躯干实体内）
         float shoulderAttachLocalY = torsoHeight * 0.9f; // T-pose 肩膀在躯干顶部

@@ -14,7 +14,7 @@ public class BodyHit : MonoBehaviour
     {
         if (collision.gameObject.layer == 3)
         {
-            agent.BodyHit(name, collision);
+            agent.BodyHit(name);
         }
     }
 }

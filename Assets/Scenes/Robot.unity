@@ -828,7 +828,7 @@ MonoBehaviour:
   robotRoot: {fileID: 0}
   targetStandTime: 10
   targetHeight: 0.8
-  jointLerp: 1
+  jointLerp: 0.2
   rangeTilt: 20
   showDebugInfo: 1
   closeReset: 0

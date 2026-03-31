@@ -163,9 +163,6 @@ public class RobotBalanceAgent : Agent
 
     public override void OnEpisodeBegin()
     {
-        //Debug.Log($"[RobotBalanceAgent] ========== OnEpisodeBegin 被调用 ==========");
-        onTargetTime = 0;
-        // 初始化 action buffer
         int actionSize = GetComponent<BehaviorParameters>().BrainParameters.ActionSpec.NumContinuousActions;
 
         // 重置机器人姿态到初始状态
@@ -472,7 +469,6 @@ public class RobotBalanceAgent : Agent
     {
         Balance();
     }
-    float onTargetTime;
 
     public void Balance()
     {
@@ -485,26 +481,21 @@ public class RobotBalanceAgent : Agent
 
         // ===== 竖直奖励（核心）=====
         float upright = Vector3.Dot(pelvis.transform.up, Vector3.up);
-        reward += upright * 0.02f;
+        reward += upright * 0.1f;
 
-        reward -= Mathf.Abs(pelvis.transform.position.y - targetHeight) * 0.01f;
+        if (upright < 0.5f) // 大约50°倾斜
+        {
+            AddReward(-1f);
+            EndEpisode();
+            return;
+        }
 
-        // ===== 双手触地 =====
-        if (leftHandOnGround)
-        {
-            Debug.Log("leftHandOnGround");
-            reward -= 0.01f;
-        }
-        if (rightHandOnGround)
-        {
-            Debug.Log("rightHandOnGround");
-            reward -= 0.01f;
-        }
+        reward -= Mathf.Abs(pelvis.transform.position.y - targetHeight) * 0.05f;
 
         // ===== 双脚离地 =====
         if (!leftFeetOnGround && !rightFeetOnGround)
         {
-            reward -= 0.02f;
+            reward -= 0.05f;
         }
 
         AddReward(reward);
@@ -526,7 +517,15 @@ public class RobotBalanceAgent : Agent
 
         if (pelvisOnGround || torsoOnGround)
         {
-            AddReward(-3f);
+            AddReward(-5f);
+            EndEpisode();
+            return;
+        }
+
+        // ===== 双手触地 =====
+        if (leftHandOnGround || rightHandOnGround)
+        {
+            AddReward(-1f);
             EndEpisode();
             return;
         }

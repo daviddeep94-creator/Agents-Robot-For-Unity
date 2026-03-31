@@ -25,15 +25,10 @@ public class RobotBalanceAgent : Agent
     [Tooltip("目标站立时间（秒），达到后给予奖励")]
     [SerializeField] private float targetStandTime = 10f;
 
-    [Tooltip("机器人重心高度误差")]
-    [SerializeField] private float targetHeightDiff = 0.25f;
+    [Tooltip("机器人目标高度")]
+    [SerializeField] private float targetHeight = 0.8f;
 
-    [Tooltip("机器人目标距离误差")]
-    [SerializeField] private float targetDisDiff = 1;
-    [Tooltip("机器人速度影响")]
-    [SerializeField] private float velocityImpact = 0.1f;
-    [Tooltip("最大允许的倾斜角度（度）")]
-    [SerializeField] private float maxTiltAngle = 30f;
+
 
     [Tooltip("关节平滑")]
     [SerializeField] private float jointLerp = 0.2f;
@@ -48,15 +43,6 @@ public class RobotBalanceAgent : Agent
 
     [Header("关闭重置")]
     [SerializeField] private bool closeReset = false;
-
-    [Header("目标")]
-    [SerializeField] private Transform target;
-    Vector3 targetOriginPos;
-    [Header("目标类型")]
-    [SerializeField] private TargetType targetType = TargetType.BalancePoint;
-    // 状态变量
-
-    private Vector3 targetDri;
 
 
     private ArticulationBody[] allJoints;
@@ -86,11 +72,6 @@ public class RobotBalanceAgent : Agent
                 Debug.Log("[RobotBalanceAgent] 自动找到 robotRoot");
             }
         }
-        if (!target)
-        {
-            target = new GameObject("Target").transform;
-        }
-        targetOriginPos = target.position;
     }
 
     private void Start()
@@ -144,7 +125,6 @@ public class RobotBalanceAgent : Agent
         rightElbowIndex = FindJointIndex("Right_ElbowJoint");
 
         Debug.Log($"[RobotBalanceAgent] 关节索引: Torso={torsoIndex}, L_Hip={leftHipIndex}, R_Hip={rightHipIndex}");
-        target.transform.position = allJoints[pelvisIndex].transform.position;
         // 保存所有关节的初始状态
         SaveInitialJointStates();
     }
@@ -190,16 +170,6 @@ public class RobotBalanceAgent : Agent
 
         // 重置机器人姿态到初始状态
         ResetRobotPose();
-
-        if (targetType == TargetType.BalancePoint)
-        {
-            allJoints[pelvisIndex].TeleportRoot(allJoints[pelvisIndex].transform.position, Quaternion.Euler(Random.Range(-1f, 1f) * rangeTilt, 0, Random.Range(-1f, 1f) * rangeTilt));
-        }
-
-        if (targetType == TargetType.Move)
-        {
-            target.position = new Vector3(Random.Range(-10, 10), target.position.y, Random.Range(-10, 10));
-        }
     }
 
     /// <summary>
@@ -218,7 +188,8 @@ public class RobotBalanceAgent : Agent
         );
     }
 
-    bool leftFootOnGround, rightFootOnGround;
+    bool leftFeetOnGround, rightFeetOnGround;
+    bool leftHandOnGround, rightHandOnGround;
     bool pelvisOnGround, torsoOnGround;
     public void BodyHit(string name)
     {
@@ -226,10 +197,16 @@ public class RobotBalanceAgent : Agent
         switch (name)
         {
             case "Left_AnkleJoint":
-                leftFootOnGround = true;
+                leftFeetOnGround = true;
                 break;
             case "Right_AnkleJoint":
-                rightFootOnGround = true;
+                rightFeetOnGround = true;
+                break;
+            case "Left_ElbowJoint":
+                leftHandOnGround = true;
+                break;
+            case "Right_ElbowJoint":
+                rightHandOnGround = true;
                 break;
             case "Pelvis_Joint":
                 pelvisOnGround = true;
@@ -243,10 +220,12 @@ public class RobotBalanceAgent : Agent
     }
     public void ClearHit()
     {
-        leftFootOnGround = false;
-        rightFootOnGround = false;
+        leftFeetOnGround = false;
+        rightFeetOnGround = false;
         pelvisOnGround = false;
         torsoOnGround = false;
+        rightHandOnGround = false;
+        leftHandOnGround = false;
     }
     Vector3 worldCenterOfMass;
     Vector3 worldCenterOfMassVelocity;
@@ -342,9 +321,13 @@ public class RobotBalanceAgent : Agent
             }
         }
 
-        sensor.AddObservation(leftFootOnGround);
+        sensor.AddObservation(leftFeetOnGround);
         dimensionality += 1;
-        sensor.AddObservation(rightFootOnGround);
+        sensor.AddObservation(rightFeetOnGround);
+        dimensionality += 1;
+        sensor.AddObservation(leftHandOnGround);
+        dimensionality += 1;
+        sensor.AddObservation(rightHandOnGround);
         dimensionality += 1;
 #if UNITY_EDITOR
         Debug.Log($"总维度:{dimensionality}");
@@ -380,9 +363,6 @@ public class RobotBalanceAgent : Agent
             Debug.LogError("[RobotBalanceAgent] OnActionReceived: robotRoot 为 null！");
             return;
         }
-
-        if (targetType == TargetType.None)
-            return;
 
         // 应用关节力矩（12个连续动作对应12个关节）26d
         ApplyJointForces(actions.ContinuousActions);
@@ -490,26 +470,11 @@ public class RobotBalanceAgent : Agent
     /// </summary>
     private void CalculateAndApplyReward()
     {
-        if (robotRoot == null) return;
-
-        switch (targetType)
-        {
-            case TargetType.None:
-                break;
-            case TargetType.BalancePoint:
-                Ballance();
-                break;
-            case TargetType.Move:
-                Ballance();
-                Move();
-                break;
-            default:
-                break;
-        }
+        Balance();
     }
     float onTargetTime;
 
-    public void Ballance()
+    public void Balance()
     {
         ArticulationBody pelvis = allJoints[pelvisIndex];
 
@@ -522,19 +487,24 @@ public class RobotBalanceAgent : Agent
         float upright = Vector3.Dot(pelvis.transform.up, Vector3.up);
         reward += upright * 0.02f;
 
-        // ===== 非脚接触 =====
-        if (pelvisOnGround || torsoOnGround)
+        reward -= Mathf.Abs(pelvis.transform.position.y - targetHeight) * 0.01f;
+
+        // ===== 双手触地 =====
+        if (leftHandOnGround)
         {
-            reward -= 1f;
-            AddReward(reward);
-            EndEpisode();
-            return;
+            Debug.Log("leftHandOnGround");
+            reward -= 0.01f;
+        }
+        if (rightHandOnGround)
+        {
+            Debug.Log("rightHandOnGround");
+            reward -= 0.01f;
         }
 
         // ===== 双脚离地 =====
-        if (!leftFootOnGround && !rightFootOnGround)
+        if (!leftFeetOnGround && !rightFeetOnGround)
         {
-            reward -= 0.05f;
+            reward -= 0.02f;
         }
 
         AddReward(reward);
@@ -544,14 +514,6 @@ public class RobotBalanceAgent : Agent
 
     public void Move()
     {
-        // ===== 1. 获取核心状态 =====
-        Transform pelvisPos = allJoints[pelvisIndex].transform;
-        if (targetDri.magnitude > 0.5)
-        {
-            //面向目标加分，否则扣分
-            float Reward = Vector3.Dot(targetDri.normalized, pelvisPos.forward);
-            AddReward(Reward * 0.02f);
-        }
     }
 
     /// <summary>
@@ -564,7 +526,7 @@ public class RobotBalanceAgent : Agent
 
         if (pelvisOnGround || torsoOnGround)
         {
-            AddReward(-1f);
+            AddReward(-3f);
             EndEpisode();
             return;
         }
@@ -732,7 +694,7 @@ public class RobotBalanceAgent : Agent
         point2.y = 0;
         Debug.DrawLine(point1, point2, Color.green);
 
-        Vector3 velocityOfWorld = allJoints[pelvisIndex].velocity * Time.fixedDeltaTime * velocityImpact;
+        Vector3 velocityOfWorld = allJoints[pelvisIndex].velocity;
         velocityOfWorld.y = 0;
         Vector3 centerOfWorld = worldCenterOfMass;
         centerOfWorld.y = 0;

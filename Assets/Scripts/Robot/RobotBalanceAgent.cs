@@ -25,18 +25,22 @@ public class RobotBalanceAgent : Agent
     [Tooltip("目标站立时间（秒），达到后给予奖励")]
     [SerializeField] private float targetStandTime = 10f;
 
+    [Header("目标站立时间")]
+    [SerializeField] private float standTime = 0;
+
+
     [Tooltip("机器人目标高度")]
     [SerializeField] private float targetHeight = 0.8f;
 
-
+    [Header("机器人body角度奖励，默认只设置臀部奖励")]
+    [SerializeField] private float bodyUpReward = 0;
 
     [Tooltip("关节平滑")]
     [SerializeField] private float jointLerp = 0.2f;
 
     // ===== 重置相关 =====
-    [Header("重置相关")]
-    [Tooltip("重置时给一个随机倾斜角度")]
-    [SerializeField] private float rangeTilt = 5;
+    [Header("重置时给一个随机倾斜角度,从0开始训练")]
+    [SerializeField] private float rangeTilt = 0;
 
     [Header("调试")]
     [SerializeField] private bool showDebugInfo = true;
@@ -167,6 +171,12 @@ public class RobotBalanceAgent : Agent
 
         // 重置机器人姿态到初始状态
         ResetRobotPose();
+        standTime = 0;
+
+        if (rangeTilt > 0)
+        {
+            allJoints[pelvisIndex].TeleportRoot(allJoints[pelvisIndex].transform.position, Quaternion.Euler(Random.Range(-rangeTilt, rangeTilt), 0, Random.Range(-rangeTilt, rangeTilt)));
+        }
     }
 
     /// <summary>
@@ -472,7 +482,9 @@ public class RobotBalanceAgent : Agent
 
     public void Balance()
     {
+        standTime += Time.fixedDeltaTime;
         ArticulationBody pelvis = allJoints[pelvisIndex];
+        ArticulationBody body = allJoints[torsoIndex];
 
         float reward = 0f;
 
@@ -482,6 +494,13 @@ public class RobotBalanceAgent : Agent
         // ===== 竖直奖励（核心）=====
         float upright = Vector3.Dot(pelvis.transform.up, Vector3.up);
         reward += upright * 0.1f;
+
+        if (bodyUpReward > 0)
+        {
+            float bodyuUpright = Vector3.Dot(body.transform.up, Vector3.up);
+            reward += bodyuUpright * bodyUpReward;
+        }
+
 
         if (upright < 0.5f) // 大约50°倾斜
         {

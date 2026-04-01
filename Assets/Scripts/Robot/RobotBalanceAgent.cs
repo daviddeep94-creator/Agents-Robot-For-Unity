@@ -520,6 +520,13 @@ public class RobotBalanceAgent : Agent
         AddReward(reward);
 
         AddReward(-pelvis.angularVelocity.sqrMagnitude * 0.001f);
+
+        if (standTime >= targetStandTime)
+        {
+            AddReward(+5f);
+            EndEpisode();
+            return;
+        }
     }
 
     public void Move()

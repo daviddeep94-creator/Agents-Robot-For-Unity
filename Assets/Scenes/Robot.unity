@@ -826,10 +826,14 @@ MonoBehaviour:
   hasUpgradedFromAgentParameters: 1
   MaxStep: 0
   robotRoot: {fileID: 0}
-  targetStandTime: 10
+  targetStandTime: 20
+  standTime: 0
   targetHeight: 0.8
+  bodyUpReward: 0.1
+  randomForce: 20
+  randomForcefrequency: 0.5
   jointLerp: 0.2
-  rangeTilt: 20
+  rangeTilt: 10
   showDebugInfo: 1
   closeReset: 0
 --- !u!114 &504704204
@@ -854,7 +858,7 @@ MonoBehaviour:
     VectorActionDescriptions: []
     VectorActionSpaceType: 0
     hasUpgradedBrainParametersWithActionSpec: 1
-  m_Model: {fileID: 0}
+  m_Model: {fileID: 5022602860645237092, guid: 1e3655b285f1e3941bfc4bbe88de0700, type: 3}
   m_InferenceDevice: 0
   m_BehaviorType: 0
   m_BehaviorName: RobotBalanceAgent

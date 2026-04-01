@@ -35,6 +35,10 @@ public class RobotBalanceAgent : Agent
     [Header("机器人body角度奖励，默认只设置臀部奖励")]
     [SerializeField] private float bodyUpReward = 0;
 
+    [Header("给一个随机力")]
+    [SerializeField] private float randomForce = 10;
+    [Header("施加力的频率")]
+    [SerializeField] private float randomForcefrequency = 0.1f;
     [Tooltip("关节平滑")]
     [SerializeField] private float jointLerp = 0.2f;
 
@@ -83,6 +87,8 @@ public class RobotBalanceAgent : Agent
         Debug.Log("[RobotBalanceAgent] Start() 被调用");
 
         InitializeRobot();
+
+        RandomAngle();
     }
 
     /// <summary>
@@ -172,10 +178,16 @@ public class RobotBalanceAgent : Agent
         // 重置机器人姿态到初始状态
         ResetRobotPose();
         standTime = 0;
+        RandomAngle();
+    }
 
+    public void RandomAngle()
+    {
         if (rangeTilt > 0)
         {
-            allJoints[pelvisIndex].TeleportRoot(allJoints[pelvisIndex].transform.position, Quaternion.Euler(Random.Range(-rangeTilt, rangeTilt), 0, Random.Range(-rangeTilt, rangeTilt)));
+            allJoints[pelvisIndex].gameObject.SetActive(false);
+            allJoints[pelvisIndex].transform.rotation = Quaternion.Euler(Random.Range(-rangeTilt, rangeTilt), 0, Random.Range(-rangeTilt, rangeTilt));
+            allJoints[pelvisIndex].gameObject.SetActive(true);
         }
     }
 
@@ -497,8 +509,8 @@ public class RobotBalanceAgent : Agent
 
         if (bodyUpReward > 0)
         {
-            float bodyuUpright = Vector3.Dot(body.transform.up, Vector3.up);
-            reward += bodyuUpright * bodyUpReward;
+            float bodyuUpright = Vector3.Angle(body.transform.up, Vector3.up);
+            reward -= bodyuUpright * bodyUpReward;
         }
 
 
@@ -523,10 +535,20 @@ public class RobotBalanceAgent : Agent
 
         if (standTime >= targetStandTime)
         {
-            AddReward(+5f);
+            //AddReward(+1f);
             EndEpisode();
             return;
         }
+
+        RandomForce();
+    }
+
+    public void RandomForce()
+    {
+        if (randomForce == 0) return;
+
+        if (Random.value < randomForcefrequency)
+            allJoints[torsoIndex].AddForce(new Vector3(Random.Range(-randomForce, randomForce), 0, Random.Range(-randomForce, randomForce)));
     }
 
     public void Move()

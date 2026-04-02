@@ -516,7 +516,7 @@ public class RobotBalanceAgent : Agent
 
         if (upright < 0.5f) // 大约50°倾斜
         {
-            AddReward(-1f);
+            AddReward(-50f);
             EndEpisode();
             return;
         }
@@ -565,7 +565,7 @@ public class RobotBalanceAgent : Agent
 
         if (pelvisOnGround || torsoOnGround)
         {
-            AddReward(-5f);
+            AddReward(-50f);
             EndEpisode();
             return;
         }
@@ -573,7 +573,7 @@ public class RobotBalanceAgent : Agent
         // ===== 双手触地 =====
         if (leftHandOnGround || rightHandOnGround)
         {
-            AddReward(-1f);
+            AddReward(-50f);
             EndEpisode();
             return;
         }

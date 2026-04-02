@@ -829,11 +829,11 @@ MonoBehaviour:
   targetStandTime: 20
   standTime: 0
   targetHeight: 0.8
-  bodyUpReward: 0.1
-  randomForce: 20
-  randomForcefrequency: 0.5
+  bodyUpReward: 0.005
+  randomForce: 0
+  randomForcefrequency: 0
   jointLerp: 0.2
-  rangeTilt: 10
+  rangeTilt: 3
   showDebugInfo: 1
   closeReset: 0
 --- !u!114 &504704204

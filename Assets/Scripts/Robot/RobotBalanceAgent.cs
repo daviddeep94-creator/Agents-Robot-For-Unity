@@ -34,6 +34,8 @@ public class RobotBalanceAgent : Agent
 
     [Header("机器人body角度奖励，默认只设置臀部奖励")]
     [SerializeField] private float bodyUpReward = 0;
+    [Header("机器人重心奖励")]
+    [SerializeField] private float centerToSupportDistanceReward = 0.01f;
 
     [Header("给一个随机力")]
     [SerializeField] private float randomForce = 10;
@@ -44,7 +46,14 @@ public class RobotBalanceAgent : Agent
 
     // ===== 重置相关 =====
     [Header("重置时给一个随机倾斜角度,从0开始训练")]
-    [SerializeField] private float rangeTilt = 0;
+    [SerializeField] private bool rangeTilt;
+    [Header("随机角度x范围")]
+    [SerializeField] private float xMinRangeTilt = -5;
+    [SerializeField] private float xMaxRangeTilt = 1;
+    [Header("随机角度z范围")]
+    [SerializeField] private float zMinRangeTilt = -3;
+    [SerializeField] private float zMaxRangeTilt = 3;
+
 
     [Header("调试")]
     [SerializeField] private bool showDebugInfo = true;
@@ -177,16 +186,17 @@ public class RobotBalanceAgent : Agent
 
         // 重置机器人姿态到初始状态
         ResetRobotPose();
-        standTime = 0;
         RandomAngle();
+        standTime = 0;
+        lastDist = 0;
     }
 
     public void RandomAngle()
     {
-        if (rangeTilt > 0)
+        if (rangeTilt)
         {
             allJoints[pelvisIndex].gameObject.SetActive(false);
-            allJoints[pelvisIndex].transform.rotation = Quaternion.Euler(Random.Range(-rangeTilt, rangeTilt), 0, Random.Range(-rangeTilt, rangeTilt));
+            allJoints[pelvisIndex].transform.rotation = Quaternion.Euler(Random.Range(xMinRangeTilt, xMaxRangeTilt), 0, Random.Range(zMinRangeTilt, zMaxRangeTilt));
             allJoints[pelvisIndex].gameObject.SetActive(true);
         }
     }
@@ -492,50 +502,80 @@ public class RobotBalanceAgent : Agent
         Balance();
     }
 
+    float lastDist;
     public void Balance()
     {
         standTime += Time.fixedDeltaTime;
+
         ArticulationBody pelvis = allJoints[pelvisIndex];
         ArticulationBody body = allJoints[torsoIndex];
 
         float reward = 0f;
 
-        // ===== 存活奖励 =====
-        reward += 0.01f;
+        // ===== 1. 存活奖励（缩小）=====
+        reward += 0.005f;
 
-        // ===== 竖直奖励（核心）=====
+        // ===== 2. 竖直奖励（降低锁死倾向）=====
         float upright = Vector3.Dot(pelvis.transform.up, Vector3.up);
-        reward += upright * 0.1f;
+        reward += upright * 0.05f;
 
-        if (bodyUpReward > 0)
+        // ===== 3. 重心与支撑关系 =====
+        Vector3 leftFeet = allJoints[leftAnkleIndex].transform.position;
+        Vector3 rightFeet = allJoints[rightAnkleIndex].transform.position;
+
+        Vector2 support1 = new Vector2(leftFeet.x, leftFeet.z);
+        Vector2 support2 = new Vector2(rightFeet.x, rightFeet.z);
+        Vector2 center = new Vector2(worldCenterOfMass.x, worldCenterOfMass.z);
+
+        float dist = PointToSegmentDistance(center, support1, support2);
+
+        // ⭐ 核心1：平衡奖励（exp）
+        float balanceReward = Mathf.Exp(-dist * 5f);
+
+        // ⭐ 核心2：改善趋势
+        float improvement = lastDist - dist;
+
+        reward += balanceReward * 0.3f;
+        reward += improvement * 0.5f;
+
+        // ===== ⭐ 核心3：方向纠正奖励（关键！！！）=====
+        Vector2 velocity = new Vector2(worldCenterOfMassVelocity.x, worldCenterOfMassVelocity.z);
+        Vector2 supportCenter = (support1 + support2) * 0.5f;
+        Vector2 toCenter = supportCenter - center;
+
+        if (velocity.sqrMagnitude > 0.0001f && toCenter.sqrMagnitude > 0.0001f)
         {
-            float bodyuUpright = Vector3.Angle(body.transform.up, Vector3.up);
-            reward -= bodyuUpright * bodyUpReward;
+            float correction = Vector2.Dot(velocity.normalized, toCenter.normalized);
+            reward += correction * 0.3f;
         }
 
+        lastDist = dist;
 
-        if (upright < 0.5f) // 大约50°倾斜
+        // ===== 4. 高度约束（增强，促进弯膝）=====
+        float heightError = Mathf.Abs(pelvis.transform.position.y - targetHeight);
+        reward -= heightError * heightError * 2f;
+
+        // ===== 5. 双脚离地惩罚（轻微）=====
+        if (!leftFeetOnGround && !rightFeetOnGround)
         {
-            AddReward(-50f);
+            reward -= 0.02f;
+        }
+
+        // ===== 6. 角速度惩罚（增强，促进柔性）=====
+        reward -= pelvis.angularVelocity.sqrMagnitude * 0.003f;
+
+        AddReward(reward);
+
+        // ===== 7. 终止条件（大幅降低惩罚！！！）=====
+        if (upright < 0.5f)
+        {
+            AddReward(-2f);
             EndEpisode();
             return;
         }
 
-        reward -= Mathf.Abs(pelvis.transform.position.y - targetHeight) * 0.05f;
-
-        // ===== 双脚离地 =====
-        if (!leftFeetOnGround && !rightFeetOnGround)
-        {
-            reward -= 0.05f;
-        }
-
-        AddReward(reward);
-
-        AddReward(-pelvis.angularVelocity.sqrMagnitude * 0.001f);
-
         if (standTime >= targetStandTime)
         {
-            //AddReward(+1f);
             EndEpisode();
             return;
         }
@@ -565,7 +605,7 @@ public class RobotBalanceAgent : Agent
 
         if (pelvisOnGround || torsoOnGround)
         {
-            AddReward(-50f);
+            AddReward(-2f);
             EndEpisode();
             return;
         }
@@ -573,7 +613,7 @@ public class RobotBalanceAgent : Agent
         // ===== 双手触地 =====
         if (leftHandOnGround || rightHandOnGround)
         {
-            AddReward(-50f);
+            AddReward(-2f);
             EndEpisode();
             return;
         }

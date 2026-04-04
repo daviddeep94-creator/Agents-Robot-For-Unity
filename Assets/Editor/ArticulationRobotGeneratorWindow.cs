@@ -683,6 +683,13 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         // 在肘关节节点下添加下臂视觉/碰撞实体（Y轴方向）
         CreateVisualCollider(elbowJoint.transform, side + "_LowerArm_Visual", lowerArmVisualSize,
             new Vector3(0, -lowerArmLength * 0.5f, 0));
+
+        // 在手掌位置创建空节点（用于判断手的位置）
+        GameObject handEmptyNode = new GameObject(side + "_Hand_Empty");
+        handEmptyNode.transform.SetParent(elbowJoint.transform, false);
+        handEmptyNode.transform.localPosition = new Vector3(0, -lowerArmLength, 0);
+        handEmptyNode.transform.localRotation = Quaternion.identity;
+        handEmptyNode.transform.localScale = Vector3.one;
     }
 
     /// <summary>

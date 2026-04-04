@@ -39,8 +39,8 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
     [SerializeField] private Vector3 footSizeNormalized = new Vector3(0.06f, 0.0286f, 0.15f);
 
     [Header("质量与阻尼")]
-    [SerializeField] private float totalMassKg = 30f;
-    [SerializeField] private float angularDamping = 2f;
+    [SerializeField] private float totalMassKg = 60.0f;
+    [SerializeField] private float angularDamping = 2.0f;
     [SerializeField] private float jointFriction = 0.5f;
 
     [Header("关节驱动参数")]
@@ -51,25 +51,25 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
     [SerializeField] private float globalStiffnessScale = 1.0f;
 
     [Tooltip("髋关节刚度 - 需要大力气支撑身体")]
-    [SerializeField] private float hipJointStiffness = 30000f;
+    [SerializeField] private float hipJointStiffness = 1000.0f;
 
     [Tooltip("膝关节刚度 - 主要承重关节")]
-    [SerializeField] private float kneeJointStiffness = 20000f;
+    [SerializeField] private float kneeJointStiffness = 1000.0f;
 
     [Tooltip("踝关节刚度 - 平衡控制")]
-    [SerializeField] private float ankleJointStiffness = 5000f;
+    [SerializeField] private float ankleJointStiffness = 800.0f;
 
     [Tooltip("肩关节刚度 - 手臂活动")]
-    [SerializeField] private float shoulderJointStiffness = 10000f;
+    [SerializeField] private float shoulderJointStiffness = 300.0f;
 
     [Tooltip("肘关节刚度 - 精细控制")]
-    [SerializeField] private float elbowJointStiffness = 5000f;
+    [SerializeField] private float elbowJointStiffness = 300.0f;
 
     [Tooltip("躯干关节刚度 - 身体平衡")]
-    [SerializeField] private float torsoJointStiffness = 10000f;
+    [SerializeField] private float torsoJointStiffness = 500.0f;
 
     [Tooltip("颈部关节刚度 - 头部转动")]
-    [SerializeField] private float neckJointStiffness = 3000f;
+    [SerializeField] private float neckJointStiffness = 300.0f;
 
     [Header("关节旋转限制(度) - Lower, Upper")]
     // 臀部：前后、左右、扭转
@@ -88,25 +88,29 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
     [SerializeField] private Vector2 neckTwist = new Vector2(-45f, 45f);
 
     // 髋关节：xDrive=前后摆动，yDrive=扭转，zDrive=左右摆动
-    [SerializeField] private Vector2 hipTwist = new Vector2(-20f, 90f);  // 前后摆动(X轴)
-    [SerializeField] private Vector2 hipSwingY = new Vector2(-30f, 30f);  // 扭转(Y轴)
-    [SerializeField] private Vector2 hipSwingZ = new Vector2(-30f, 30f);  // 左右摆动(Z轴)
+    [SerializeField] private Vector2 hipTwist = new Vector2(-110.0f, 30.0f);  // 前后摆动(X轴)
+    [SerializeField] private Vector2 hipSwingY = new Vector2(0.0f, 0.0f);  // 扭转(Y轴)
+    [SerializeField] private Vector2 hipSwingZ = new Vector2(-40.0f, 5.0f);  // 左右摆动(Z轴)
 
     // 膝关节：只能向前弯曲150度
     [SerializeField] private Vector2 kneeTwist = new Vector2(0f, 150f);  // 弯曲(X轴)
 
     // 踝关节：前后45度，左右20度，扭转15度
-    [SerializeField] private Vector2 ankleTwist = new Vector2(-45f, 45f);  // 前后摆动(X轴)
-    [SerializeField] private Vector2 ankleSwingY = new Vector2(-15f, 15f);  // 扭转(Y轴)
-    [SerializeField] private Vector2 ankleSwingZ = new Vector2(-20f, 20f);  // 左右摆动(Z轴)
+    [SerializeField] private Vector2 ankleTwist = new Vector2(-45.0f, 45.0f);  // 前后摆动(X轴)
+    [SerializeField] private Vector2 ankleSwingY = new Vector2(0.0f, 0.0f);  // 扭转(Y轴)
+    [SerializeField] private Vector2 ankleSwingZ = new Vector2(-20.0f, 20.0f);  // 左右摆动(Z轴)
 
     // 肩关节：前后180度，左右90度，扭转180度
-    [SerializeField] private Vector2 shoulderTwist = new Vector2(-180f, 180f);  // 前后摆动(X轴)
-    [SerializeField] private Vector2 shoulderSwingY = new Vector2(-180f, 180f);  // 扭转(Y轴)
-    [SerializeField] private Vector2 shoulderSwingZ = new Vector2(-90f, 90f);    // 左右摆动(Z轴)
+    [SerializeField] private Vector2 shoulderTwist = new Vector2(-90.0f, 90.0f);  // 前后摆动(X轴)
+    [SerializeField] private Vector2 shoulderSwingY = new Vector2(-90.0f, 90.0f);  // 扭转(Y轴)
+    [SerializeField] private Vector2 shoulderSwingZ = new Vector2(-90.0f, 0.0f);    // 左右摆动(Z轴)
 
     // 肘关节：只能向前弯曲150度
     [SerializeField] private Vector2 elbowTwist = new Vector2(0f, 150f);  // 弯曲(X轴)
+
+    [Header("生成姿态")]
+    [Tooltip("膝盖初始弯曲角度（度），用于生成时的初始姿态")]
+    [SerializeField] private float initialKneeBendAngle = 20f;
 
     [SerializeField] private Vector3 spawnPosition = new Vector3(0, 0.0f, 0);
     [SerializeField] private bool replaceExisting = true;
@@ -233,6 +237,11 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         EditorGUILayout.Space(4);
         EditorGUILayout.LabelField("肘关节", EditorStyles.miniBoldLabel);
         elbowTwist = EditorGUILayout.Vector2Field("弯曲(X)", elbowTwist);
+
+        // 生成选项
+        EditorGUILayout.Space(10);
+        EditorGUILayout.LabelField("生成姿态", EditorStyles.boldLabel);
+        initialKneeBendAngle = EditorGUILayout.FloatField("膝盖初始弯曲角度(度)", initialKneeBendAngle);
 
         // 生成选项
         EditorGUILayout.Space(15);
@@ -446,24 +455,23 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             upperLegLength, lowerLegLength, upperLegMass, lowerLegMass, footMass,
             hipJointLocalYInPelvis, kneeJointLocalYInPelvis, ankleJointLocalYInPelvis,
             angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
-            hipJointStiffness, kneeJointStiffness, ankleJointStiffness,
+            hipJointStiffness, kneeJointStiffness, initialKneeBendAngle, ankleJointStiffness,
             hipTwist, hipSwingY, hipSwingZ, kneeTwist, ankleTwist, ankleSwingY, ankleSwingZ);
         CreateLeg(pelvis.transform, "Right", legOffsetX, upperLegVisualSize, lowerLegVisualSize, footSize,
             upperLegLength, lowerLegLength, upperLegMass, lowerLegMass, footMass,
             hipJointLocalYInPelvis, kneeJointLocalYInPelvis, ankleJointLocalYInPelvis,
             angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
-            hipJointStiffness, kneeJointStiffness, ankleJointStiffness,
+            hipJointStiffness, kneeJointStiffness, initialKneeBendAngle, ankleJointStiffness,
             hipTwist, Reverse(hipSwingY), Reverse(hipSwingZ), kneeTwist, ankleTwist, Reverse(ankleSwingY), Reverse(ankleSwingZ));
 
-        // 双臂：T-pose 手臂平伸（沿 X 轴向两侧）
-        CreateArm(torso.transform, "Left", -shoulderOffsetX, upperArmVisualSize, lowerArmVisualSize,
+        CreateArm(torso.transform, "Left", -(shoulderOffsetX + upperArmVisualSize.x * 0.5f), upperArmVisualSize, lowerArmVisualSize,
             upperArmLength, lowerArmLength, upperArmMass, lowerArmMass,
             shoulderAttachLocalY,
             angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
             shoulderJointStiffness, elbowJointStiffness,
             shoulderTwist, shoulderSwingY, shoulderSwingZ, elbowTwist);
 
-        CreateArm(torso.transform, "Right", shoulderOffsetX, upperArmVisualSize, lowerArmVisualSize,
+        CreateArm(torso.transform, "Right", shoulderOffsetX + upperArmVisualSize.x * 0.5f, upperArmVisualSize, lowerArmVisualSize,
             upperArmLength, lowerArmLength, upperArmMass, lowerArmMass,
             shoulderAttachLocalY,
             angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
@@ -496,6 +504,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         float globalScale,
         float hipStiffness,
         float kneeStiffness,
+        float initialKneeBendAngleDeg,
         float ankleStiffness,
         Vector2 hipTwist,
         Vector2 hipSwingY,
@@ -505,6 +514,9 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         Vector2 ankleSwingY,
         Vector2 ankleSwingZ)
     {
+        // 计算膝盖弯曲的角度（转换为弧度）
+        float kneeBendRad = initialKneeBendAngleDeg;
+
         // 髋关节节点（使用球形关节，支持三个轴向旋转）
         var hipJoint = CreateJointNode(
             pelvis,
@@ -529,6 +541,9 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             twistLimit: hipTwist
         );
 
+        // 设置髋关节的初始前倾角度（绕x轴旋转）
+        hipJoint.transform.localRotation = Quaternion.Euler(-initialKneeBendAngleDeg * 0.5f, 0, 0);
+
         // 在髋关节节点下添加大腿视觉/碰撞实体
         CreateVisualCollider(hipJoint.transform, side + "_Thigh_Visual", upperLegVisualSize, new Vector3(0, -upperLegLength * 0.5f, 0));
 
@@ -551,6 +566,9 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             lowerLimitRad: kneeTwist.x,
             upperLimitRad: kneeTwist.y
         );
+
+        // 设置膝关节的初始弯曲角度（绕x轴旋转）
+        kneeJoint.transform.localRotation = Quaternion.Euler(initialKneeBendAngleDeg, 0, 0);
 
         // 在膝关节节点下添加小腿视觉/碰撞实体
         CreateVisualCollider(kneeJoint.transform, side + "_Shin_Visual", lowerLegVisualSize, new Vector3(0, -lowerLegLength * 0.5f, 0));
@@ -578,6 +596,9 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             swingZLimit: ankleSwingZ,
             twistLimit: ankleTwist
         );
+
+        // 设置踝关节的初始后仰角度（绕x轴旋转）
+        ankleJoint.transform.localRotation = Quaternion.Euler(-initialKneeBendAngleDeg * 0.5f, 0, 0);
 
         // 在踝关节节点下添加脚板视觉/碰撞实体
         CreateVisualCollider(ankleJoint.transform, side + "_Foot_Visual", footSize, new Vector3(0, -footSize.y * 0.5f, footSize.z * 0.3f));
@@ -608,8 +629,8 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         // T-pose: 左臂向左(-X)平伸，右臂向右(+X)平伸
         float armDirection = (side == "Left") ? -1f : 1f;
 
-        // 肩关节旋转：旋转-90度使手臂沿X轴向两侧
-        Quaternion shoulderRotation = Quaternion.Euler(0, 0, -armDirection * 90f);
+        // 肩关节旋转
+        Quaternion shoulderRotation = Quaternion.Euler(0, 0, 0);
 
         // 肩关节节点（使用球形关节）
         var shoulderJoint = CreateJointNode(
@@ -621,7 +642,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             jointType: ArticulationJointType.RevoluteJoint,
             isRoot: false,
             anchorLocalPos: Vector3.zero,
-            anchorLocalRot: Quaternion.Euler(0, 0, armDirection * 90f),
+            anchorLocalRot: Quaternion.Euler(0, 0, 0),
             configureDrive: true,
             angularDamping: angularDamping,
             jointFriction: jointFriction,
@@ -637,13 +658,13 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
 
         // 在肩关节节点下添加上臂视觉/碰撞实体（Y轴方向，因为关节已旋转90度）
         CreateVisualCollider(shoulderJoint.transform, side + "_UpperArm_Visual", upperArmVisualSize,
-            new Vector3(0, upperArmLength * 0.5f, 0));
+            new Vector3(0, -upperArmLength * 0.5f, 0));
 
         // 肘关节节点（只允许向前弯曲）
         var elbowJoint = CreateJointNode(
             shoulderJoint.transform,
             side + "_ElbowJoint",
-            new Vector3(0, upperArmLength, 0),
+            new Vector3(0, -upperArmLength, 0),
             Quaternion.identity,
             lowerArmMass,
             jointType: ArticulationJointType.RevoluteJoint,
@@ -661,7 +682,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
 
         // 在肘关节节点下添加下臂视觉/碰撞实体（Y轴方向）
         CreateVisualCollider(elbowJoint.transform, side + "_LowerArm_Visual", lowerArmVisualSize,
-            new Vector3(0, lowerArmLength * 0.5f, 0));
+            new Vector3(0, -lowerArmLength * 0.5f, 0));
     }
 
     /// <summary>
@@ -713,12 +734,14 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
 
         // 如果使用球形关节，将关节类型设置为 SphericalJoint
         articulation.jointType = useSphericalJoint ? ArticulationJointType.SphericalJoint : jointType;
-        articulation.matchAnchors = true; // 自动计算 parent anchor，使关节点更符合预期
+        articulation.matchAnchors = true; 
 
         if (!isRoot)
         {
             articulation.anchorPosition = anchorLocalPos;
             articulation.anchorRotation = anchorLocalRot;
+            //articulation.parentAnchorPosition = Vector3.zero;
+            //articulation.parentAnchorRotation = Quaternion.identity;
         }
         else
         {
@@ -885,7 +908,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
 
             Repaint();
             Debug.Log($"配置已从 {configPath} 读取成功");
-            EditorUtility.DisplayDialog("读取成功", "配置已成功加载！", "确定");
+            //EditorUtility.DisplayDialog("读取成功", "配置已成功加载！", "确定");
         }
         catch (System.Exception e)
         {
@@ -965,6 +988,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         elbowTwist = new Vector2(0f, 150f);
 
         // 生成选项
+        initialKneeBendAngle = 20f;
         spawnPosition = new Vector3(0, 0.0f, 0);
         replaceExisting = true;
 
@@ -1082,6 +1106,9 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         public float elbowTwist_x = 0f;
         public float elbowTwist_y = 150f;
 
+        // 生成姿态
+        public float initialKneeBendAngle = 20f;
+
         // 生成选项
         public float spawnPosition_x = 0;
         public float spawnPosition_y = 0;
@@ -1155,6 +1182,9 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
 
         // 肘关节
         elbowTwist = new Vector2(config.elbowTwist_x, config.elbowTwist_y);
+
+        // 生成姿态
+        initialKneeBendAngle = config.initialKneeBendAngle;
 
         // 生成选项
         spawnPosition = new Vector3(config.spawnPosition_x, config.spawnPosition_y, config.spawnPosition_z);
@@ -1251,6 +1281,9 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             // 肘关节
             elbowTwist_x = elbowTwist.x,
             elbowTwist_y = elbowTwist.y,
+
+            // 生成姿态
+            initialKneeBendAngle = initialKneeBendAngle,
 
             // 生成选项
             spawnPosition_x = spawnPosition.x,

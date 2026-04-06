@@ -1,70 +1,35 @@
+using System.Collections.Generic;
 using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
-using Unity.MLAgents.Policies;
 using Unity.MLAgents.Sensors;
-using Unity.VisualScripting;
 using UnityEngine;
 
 public enum TargetType
 {
-    None=0,
-    BalancePoint=1,
+    None = 0,
+    BalancePoint = 1,
     Move,
 }
-/// <summary>
-/// 机器人站立平衡训练Agent
-/// 使用PPO算法训练机器人在地面上保持平衡站立
-/// </summary>
+
 public class RobotBalanceAgent : Agent
 {
     [Header("机器人配置")]
-    [Tooltip("机器人根节点ArticulationBody")]
     [SerializeField] private ArticulationBody robotRoot;
 
-    [Header("训练目标")]
-    [Tooltip("目标站立时间（秒），达到后给予奖励")]
-    [SerializeField] private float targetStandTime = 10f;
+    [Header("OrientationCube")]
+    [SerializeField] private Transform orientationCube;
 
-    [Header("目标站立时间")]
-    [SerializeField] private float standTime = 0;
+    [Header("重置随机角")]
+    [SerializeField] private bool randomTilt = true;
 
-
-    [Tooltip("机器人目标高度")]
-    [SerializeField] private float targetHeight = 0.8f;
-
-    [Header("机器人body角度奖励，默认只设置臀部奖励")]
-    [SerializeField] private float bodyUpReward = 0;
-    [Header("机器人重心奖励")]
-    [SerializeField] private float centerToSupportDistanceReward = 0.01f;
-
-    [Header("给一个随机力")]
-    [SerializeField] private float randomForce = 10;
-    [Header("施加力的频率")]
-    [SerializeField] private float randomForcefrequency = 0.1f;
-    [Tooltip("关节平滑")]
-    [SerializeField] private float jointLerp = 0.2f;
-
-    // ===== 重置相关 =====
-    [Header("重置时给一个随机倾斜角度,从0开始训练")]
-    [SerializeField] private bool rangeTilt;
-    [Header("随机角度x范围")]
-    [SerializeField] private float xMinRangeTilt = -5;
-    [SerializeField] private float xMaxRangeTilt = 1;
-    [Header("随机角度z范围")]
-    [SerializeField] private float zMinRangeTilt = -3;
-    [SerializeField] private float zMaxRangeTilt = 3;
-
-
-    [Header("调试")]
-    [SerializeField] private bool showDebugInfo = true;
+    [SerializeField] private float randomForce = 10f;
+    [SerializeField] private float randomForceFrequency = 0.1f;
 
     [Header("关闭重置")]
     [SerializeField] private bool closeReset = false;
 
-
     private ArticulationBody[] allJoints;
-
-    // 关节索引映射
+    private float maxStiffness;
     private int pelvisIndex, torsoIndex;
     private int leftHipIndex, rightHipIndex;
     private int leftKneeIndex, rightKneeIndex;
@@ -72,64 +37,44 @@ public class RobotBalanceAgent : Agent
     private int leftShoulderIndex, rightShoulderIndex;
     private int leftElbowIndex, rightElbowIndex;
 
-    // 保存的初始关节状态（用于重置）
+    [SerializeField] private Transform leftHandEmpty;
+    [SerializeField] private Transform rightHandEmpty;
+
     private Vector3[] initialJointPositions;
     private Quaternion[] initialJointRotations;
     private float[] initialJointXTargets;
     private float[] initialJointYTargets;
     private float[] initialJointZTargets;
 
-    private void Awake()
-    {
-        if(robotRoot == null)
-        {
-            robotRoot = GetComponentInChildren<ArticulationBody>();
-            if (robotRoot != null)
-            {
-                Debug.Log("[RobotBalanceAgent] 自动找到 robotRoot");
-            }
-        }
-    }
+    private bool leftFeetOnGround, rightFeetOnGround;
+    private bool leftHandOnGround, rightHandOnGround;
+    private bool pelvisOnGround, torsoOnGround;
+
+    private float successTimer = 0f;
+    private float episodeTimer = 0f;
+
+    [Header("每局最长时间")]
+    public float maxEpisodeTime = 20f;
 
     private void Start()
     {
-        Debug.Log("[RobotBalanceAgent] Start() 被调用");
-
+        if (robotRoot == null) robotRoot = GetComponentInChildren<ArticulationBody>();
         InitializeRobot();
-
-        RandomAngle();
+        RandomTilt();
     }
 
-    /// <summary>
-    /// 初始化机器人引用和关节索引
-    /// </summary>
     private void InitializeRobot()
     {
-        if (robotRoot == null)
-        {
-            robotRoot = GetComponent<ArticulationBody>();
-        }
-
-        if (robotRoot == null)
-        {
-            Debug.LogError("RobotBalanceAgent: 未找到机器人根节点ArticulationBody！");
-            return;
-        }
-
-        // 获取所有关节
         allJoints = robotRoot.GetComponentsInChildren<ArticulationBody>();
-        Debug.Log($"[RobotBalanceAgent] 找到 {allJoints.Length} 个 ArticulationBody:");
-
-        // 打印所有关节名称用于调试
-        for (int i = 0; i < allJoints.Length; i++)
+        foreach (var item in allJoints)
         {
-            if (allJoints[i] != null)
-            {
-                Debug.Log($"  [{i}] {allJoints[i].name}");
-            }
+            if (item.xDrive.stiffness > maxStiffness)
+                maxStiffness = item.xDrive.stiffness;
+            if (item.yDrive.stiffness > maxStiffness)
+                maxStiffness = item.yDrive.stiffness;
+            if (item.zDrive.stiffness > maxStiffness)
+                maxStiffness = item.zDrive.stiffness;
         }
-
-        // 查找并索引各个关节
         pelvisIndex = FindJointIndex("Pelvis_Joint");
         torsoIndex = FindJointIndex("Torso_Joint");
         leftHipIndex = FindJointIndex("Left_HipJoint");
@@ -143,654 +88,297 @@ public class RobotBalanceAgent : Agent
         leftElbowIndex = FindJointIndex("Left_ElbowJoint");
         rightElbowIndex = FindJointIndex("Right_ElbowJoint");
 
-        Debug.Log($"[RobotBalanceAgent] 关节索引: Torso={torsoIndex}, L_Hip={leftHipIndex}, R_Hip={rightHipIndex}");
-        // 保存所有关节的初始状态
+        leftHandEmpty = robotRoot.transform.Find("Torso_Joint/Left_ShoulderJoint/Left_ElbowJoint/Left_Hand_Empty");
+        rightHandEmpty = robotRoot.transform.Find("Torso_Joint/Right_ShoulderJoint/Right_ElbowJoint/Right_Hand_Empty");
+
         SaveInitialJointStates();
     }
 
-    /// <summary>
-    /// 保存所有关节的初始状态
-    /// </summary>
-    private void SaveInitialJointStates()
-    {
-        RobotResetUtility.RobotInitialStates states = RobotResetUtility.SaveInitialStates(robotRoot);
-
-        initialJointPositions = states.positions;
-        initialJointRotations = states.rotations;
-        initialJointXTargets = states.xTargets;
-        initialJointYTargets = states.yTargets;
-        initialJointZTargets = states.zTargets;
-
-        Debug.Log($"[RobotBalanceAgent] 已保存 {states.jointCount} 个关节的初始状态");
-    }
-
-    /// <summary>
-    /// 查找关节索引
-    /// </summary>
-    private int FindJointIndex(string jointName)
+    private int FindJointIndex(string name)
     {
         for (int i = 0; i < allJoints.Length; i++)
-        {
-            if (allJoints[i] != null && allJoints[i].name == jointName)
-            {
-                return i;
-            }
-        }
-        Debug.LogWarning($"RobotBalanceAgent: 未找到关节 {jointName}");
+            if (allJoints[i].name == name) return i;
         return -1;
+    }
+
+    private void SaveInitialJointStates()
+    {
+        initialJointPositions = new Vector3[allJoints.Length];
+        initialJointRotations = new Quaternion[allJoints.Length];
+        initialJointXTargets = new float[allJoints.Length];
+        initialJointYTargets = new float[allJoints.Length];
+        initialJointZTargets = new float[allJoints.Length];
+
+        for (int i = 0; i < allJoints.Length; i++)
+        {
+            initialJointPositions[i] = allJoints[i].transform.localPosition;
+            initialJointRotations[i] = allJoints[i].transform.localRotation;
+            initialJointXTargets[i] = allJoints[i].xDrive.target;
+            initialJointYTargets[i] = allJoints[i].yDrive.target;
+            initialJointZTargets[i] = allJoints[i].zDrive.target;
+        }
     }
 
     public override void OnEpisodeBegin()
     {
-        int actionSize = GetComponent<BehaviorParameters>().BrainParameters.ActionSpec.NumContinuousActions;
-
-        // 重置机器人姿态到初始状态
         ResetRobotPose();
-        RandomAngle();
-        standTime = 0;
-        lastDist = 0;
+        ClearHit();
+        episodeTimer = 0f;
+        orientationCube.rotation = Quaternion.identity;
+        RandomTilt();
+
+        // OrientationCube 跟随 pelvis 位置
+        if (orientationCube != null)
+            orientationCube.position = allJoints[pelvisIndex].transform.position;
     }
 
-    public void RandomAngle()
+    public void ResetRobotPose()
     {
-        if (rangeTilt)
+        allJoints[pelvisIndex].gameObject.SetActive(false);
+        for (int i = 0; i < allJoints.Length; i++)
         {
-            allJoints[pelvisIndex].gameObject.SetActive(false);
-            allJoints[pelvisIndex].transform.rotation = Quaternion.Euler(Random.Range(xMinRangeTilt, xMaxRangeTilt), 0, Random.Range(zMinRangeTilt, zMaxRangeTilt));
-            allJoints[pelvisIndex].gameObject.SetActive(true);
+            allJoints[i].transform.localPosition = initialJointPositions[i];
+            allJoints[i].transform.localRotation = initialJointRotations[i];
+
+            var xDrive = allJoints[i].xDrive;
+            xDrive.target = initialJointXTargets[i];
+            allJoints[i].xDrive = xDrive;
+
+            var yDrive = allJoints[i].yDrive;
+            yDrive.target = initialJointYTargets[i];
+            allJoints[i].yDrive = yDrive;
+
+            var zDrive = allJoints[i].zDrive;
+            zDrive.target = initialJointZTargets[i];
+            allJoints[i].zDrive = zDrive;
         }
+
+        // 随机Y轴旋转
+        allJoints[pelvisIndex].transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+
+
+        allJoints[pelvisIndex].gameObject.SetActive(true);
     }
 
-    /// <summary>
-    /// 重置机器人姿态到初始状态
-    /// </summary>
-    private void ResetRobotPose()
+    private void RandomTilt()
     {
-        RobotResetUtility.ResetRobotPose(
-            robotRoot,
-            initialJointPositions,
-            initialJointRotations,
-            initialJointXTargets,
-            initialJointYTargets,
-            initialJointZTargets,
-            "[RobotBalanceAgent] ResetRobotPose:"
-        );
+        if (!randomTilt) return;
+        float xAngle = Random.Range(-10f, 10f);
+        float zAngle = Random.Range(-10f, 10f);
+        allJoints[pelvisIndex].transform.rotation *= Quaternion.Euler(xAngle, 0, zAngle);
     }
 
-    bool leftFeetOnGround, rightFeetOnGround;
-    bool leftHandOnGround, rightHandOnGround;
-    bool pelvisOnGround, torsoOnGround;
     public void BodyHit(string name)
     {
-        Debug.Log($"[RobotBalanceAgent] BodyHit: {name}");
         switch (name)
         {
-            case "Left_AnkleJoint":
-                leftFeetOnGround = true;
-                break;
-            case "Right_AnkleJoint":
-                rightFeetOnGround = true;
-                break;
-            case "Left_ElbowJoint":
-                leftHandOnGround = true;
-                break;
-            case "Right_ElbowJoint":
-                rightHandOnGround = true;
-                break;
-            case "Pelvis_Joint":
-                pelvisOnGround = true;
-                break;
-            case "Torso_Joint":
-                torsoOnGround = true;
-                break;
-            default:
-                break;
+            case "Left_AnkleJoint": leftFeetOnGround = true; break;
+            case "Right_AnkleJoint": rightFeetOnGround = true; break;
+            case "Left_ElbowJoint": leftHandOnGround = true; break;
+            case "Right_ElbowJoint": rightHandOnGround = true; break;
+            case "Pelvis_Joint": pelvisOnGround = true; break;
+            case "Torso_Joint": torsoOnGround = true; break;
         }
     }
+
     public void ClearHit()
     {
-        leftFeetOnGround = false;
-        rightFeetOnGround = false;
-        pelvisOnGround = false;
-        torsoOnGround = false;
-        rightHandOnGround = false;
-        leftHandOnGround = false;
+        leftFeetOnGround = rightFeetOnGround = false;
+        leftHandOnGround = rightHandOnGround = false;
+        pelvisOnGround = torsoOnGround = false;
     }
-    Vector3 worldCenterOfMass;
-    Vector3 worldCenterOfMassVelocity;
+
     public override void CollectObservations(VectorSensor sensor)
     {
-        if (robotRoot == null || allJoints == null || allJoints.Length == 0)
-        {
-            Debug.LogError($"[RobotBalanceAgent] CollectObservations: 机器人或关节未初始化 - robotRoot={robotRoot != null}, allJoints={allJoints?.Length}");
-            return;
-        }
+        orientationCube.position = allJoints[pelvisIndex].transform.position;
+        //布娃娃的平均速度
+        var avgVel = GetAvgVelocity();
+        //当前布娃娃速度，归一化
+        sensor.AddObservation(avgVel.magnitude);
+        //相对于立方体的平均身体速度
+        sensor.AddObservation(orientationCube.transform.InverseTransformDirection(avgVel));
 
-        int dimensionality = 0;
-        ArticulationBody body = allJoints[pelvisIndex];
-        // 计算机器人整体重心和整体速度
-        worldCenterOfMass = Vector3.zero;
-        worldCenterOfMassVelocity = Vector3.zero;
-        float totalMass = 0f;
+        var pelvis = allJoints[pelvisIndex];
+        // pelvis朝向参考
+        sensor.AddObservation(Quaternion.FromToRotation(allJoints[pelvisIndex].transform.forward, orientationCube.forward));
 
-        Vector3 supportPoint = body.transform.position;
+        // 手
+        Vector3 leftHand = orientationCube.InverseTransformPoint(leftHandEmpty.position);
+        Vector3 rightHand = orientationCube.InverseTransformPoint(rightHandEmpty.position);
+        sensor.AddObservation(leftHand);
+        sensor.AddObservation(rightHand);
 
+        // 关节旋转（归一化）
         foreach (var joint in allJoints)
         {
-            if (joint != null)
+            if (joint == pelvis) continue;
+
+            sensor.AddObservation(orientationCube.transform.InverseTransformDirection(joint.velocity));
+            sensor.AddObservation(orientationCube.transform.InverseTransformDirection(joint.angularVelocity));
+            //在我们的方向立方体空间中获取相对于臀部的位置
+            sensor.AddObservation(orientationCube.transform.InverseTransformDirection(joint.worldCenterOfMass - allJoints[pelvisIndex].worldCenterOfMass));
+
+            if (joint.jointType != ArticulationJointType.FixedJoint)
             {
-                float mass = joint.mass;
-                worldCenterOfMass += joint.worldCenterOfMass * mass;
-                worldCenterOfMassVelocity += joint.velocity * mass;
-                totalMass += mass;
-            }
-        }
-
-        if (totalMass > 0)
-        {
-            worldCenterOfMass /= totalMass;
-            worldCenterOfMassVelocity /= totalMass;
-        }
-        Debug.DrawLine(supportPoint, worldCenterOfMass, Color.red);
-
-
-        // 1. 机器人整体重心
-        sensor.AddObservation(body.transform.InverseTransformPoint(worldCenterOfMass));
-        dimensionality += 3;
-
-        // 2. 机器人整体速度
-        sensor.AddObservation(body.transform.InverseTransformVector(worldCenterOfMassVelocity));
-        dimensionality += 3;
-
-        // 3. 机器人根节点上
-        sensor.AddObservation(body.transform.up);
-        dimensionality += 3;
-
-        // 4. 机器人根节点角速度
-        sensor.AddObservation(body.transform.InverseTransformVector(body.angularVelocity));
-        dimensionality += 3;
-
-        Vector3 leftFeet = allJoints[leftAnkleIndex].transform.position;
-        Vector3 rightFeet = allJoints[rightAnkleIndex].transform.position;
-        sensor.AddObservation(body.transform.InverseTransformPoint(leftFeet));
-        sensor.AddObservation(body.transform.InverseTransformPoint(rightFeet));
-        dimensionality += 6;
-        // 6. 各关节局部旋转
-        foreach (var joint in allJoints)
-        {
-            if (joint == body) continue;
-            if (joint != null && joint.jointType != ArticulationJointType.FixedJoint)
-            {
-                if (joint.jointType == ArticulationJointType.RevoluteJoint)
-                {
-                    sensor.AddObservation(NormalizeAngle(joint.transform.localRotation.eulerAngles.x));
-                    dimensionality += 1;
-                }
-                else if (joint.jointType == ArticulationJointType.SphericalJoint)
-                {
-                    if (joint.xDrive.lowerLimit != 0 || joint.xDrive.upperLimit != 0)
-                    {
-                        sensor.AddObservation(NormalizeAngle(joint.transform.localRotation.eulerAngles.x));
-                        dimensionality += 1;
-                    }
-                    if (joint.yDrive.lowerLimit != 0 || joint.yDrive.upperLimit != 0)
-                    {
-                        sensor.AddObservation(NormalizeAngle(joint.transform.localRotation.eulerAngles.y));
-                        dimensionality += 1;
-                    }
-                    if (joint.zDrive.lowerLimit != 0 || joint.zDrive.upperLimit != 0)
-                    {
-                        sensor.AddObservation(NormalizeAngle(joint.transform.localRotation.eulerAngles.z));
-                        dimensionality += 1;
-                    }
-                }
-
-                sensor.AddObservation(joint.transform.parent.InverseTransformVector(joint.angularVelocity));
-                dimensionality += 3;
+                sensor.AddObservation(NormalizeAngle180(joint.transform.localRotation.eulerAngles.x) / 180f);
+                sensor.AddObservation(NormalizeAngle180(joint.transform.localRotation.eulerAngles.y) / 180f);
+                sensor.AddObservation(NormalizeAngle180(joint.transform.localRotation.eulerAngles.z) / 180f);
+                sensor.AddObservation(joint.xDrive.stiffness / maxStiffness);
             }
         }
 
         sensor.AddObservation(leftFeetOnGround);
-        dimensionality += 1;
         sensor.AddObservation(rightFeetOnGround);
-        dimensionality += 1;
         sensor.AddObservation(leftHandOnGround);
-        dimensionality += 1;
         sensor.AddObservation(rightHandOnGround);
-        dimensionality += 1;
-#if UNITY_EDITOR
-        Debug.Log($"总维度:{dimensionality}");
-#endif
+        sensor.AddObservation(pelvisOnGround);
+        sensor.AddObservation(torsoOnGround);
     }
 
-    public static float NormalizeAngle(float angle)
+    Vector3 GetAvgVelocity()
     {
-        return NormalizeAngle180(angle) / 180;// 先映射到 [-1,1)
-    }
-    /// <summary>
-    /// 将角度归一化到 [-180, 180) 区间
-    /// </summary>
-    public static float NormalizeAngle180(float angle)
-    {
-        angle = NormalizeAngle360(angle); // 先映射到 [0,360)
-        if (angle >= 180f) angle -= 360f;
-        return angle;
-    }
-    /// <summary>
-    /// 将角度归一化到 [0, 360) 区间
-    /// </summary>
-    public static float NormalizeAngle360(float angle)
-    {
-        angle %= 360f;
-        if (angle < 0) angle += 360f;
-        return angle;
-    }
-    public override void OnActionReceived(ActionBuffers actions)
-    {
-        if (robotRoot == null)
+        Vector3 velSum = Vector3.zero;
+
+        //所有刚体
+        int numOfRb = 0;
+        foreach (var item in allJoints)
         {
-            Debug.LogError("[RobotBalanceAgent] OnActionReceived: robotRoot 为 null！");
-            return;
+            numOfRb++;
+            velSum += item.velocity;
         }
 
-        // 应用关节力矩（12个连续动作对应12个关节）26d
+        var avgVel = velSum / numOfRb;
+        return avgVel;
+    }
+
+    public override void OnActionReceived(ActionBuffers actions)
+    {
+        episodeTimer += Time.fixedDeltaTime;
+
         ApplyJointForces(actions.ContinuousActions);
 
-        // 计算奖励
-        CalculateAndApplyReward();
+        CalculateReward();
 
-        // 检查终止条件
-        CheckTermination();
+        CheckDone();
 
         ClearHit();
     }
 
-    /// <summary>
-    /// 应用关节力矩
-    /// </summary>
     private void ApplyJointForces(ActionSegment<float> actions)
     {
         int index = 0;
+        for (int i = 0; i < allJoints.Length; i++)
+        {
+            var joint = allJoints[i];
+            if (joint.jointType == ArticulationJointType.FixedJoint) continue;
 
-        // 左腿
-        if (leftHipIndex >= 0)  // 髋关节（3轴）
-        {
-            ApplyForceToJoint(allJoints[leftHipIndex], actions[index++], actions[index++], actions[index++]);
-        }
-        if (leftKneeIndex >= 0)  // 膝关节（1轴）
-        {
-            ApplyForceToJoint(allJoints[leftKneeIndex], actions[index++], 0, 0);
-        }
-        if (leftAnkleIndex >= 0)  // 踝关节（2轴）
-        {
-            ApplyForceToJoint(allJoints[leftAnkleIndex], actions[index++], 0, actions[index++]);
-        }
+            float tX = Mathf.Clamp01((actions[index++] + 1f) / 2f);
+            ArticulationDrive xDrive = joint.xDrive;
+            xDrive.target = Mathf.Lerp(joint.xDrive.lowerLimit, joint.xDrive.upperLimit, tX);
+            joint.xDrive = xDrive;
+            if (joint.jointType == ArticulationJointType.SphericalJoint)
+            {
+                float tY = Mathf.Clamp01((actions[index++] + 1f) / 2f);
+                float tZ = Mathf.Clamp01((actions[index++] + 1f) / 2f);
 
-        // 右腿
-        if (rightHipIndex >= 0)  // 髋关节（3轴）
-        {
-            ApplyForceToJoint(allJoints[rightHipIndex], actions[index++], actions[index++], actions[index++]);
-        }
-        if (rightKneeIndex >= 0)  // 膝关节（1轴）
-        {
-            ApplyForceToJoint(allJoints[rightKneeIndex], actions[index++], 0, 0);
-        }
-        if (rightAnkleIndex >= 0)  // 踝关节（2轴）
-        {
-            ApplyForceToJoint(allJoints[rightAnkleIndex], actions[index++], 0, actions[index++]);
-        }
+                ArticulationDrive yDrive = joint.yDrive;
+                yDrive.target = Mathf.Lerp(joint.yDrive.lowerLimit, joint.yDrive.upperLimit, tY);
+                joint.yDrive = yDrive;
 
-        // 身体（2轴）
-        if (torsoIndex >= 0)
-        {
-            ApplyForceToJoint(allJoints[torsoIndex], actions[index++], 0, actions[index++]);
+                ArticulationDrive zDrive = joint.zDrive;
+                zDrive.target = Mathf.Lerp(joint.zDrive.lowerLimit, joint.zDrive.upperLimit, tZ);
+                joint.zDrive = zDrive;
+            }
         }
-        // 左臂
-        if (leftShoulderIndex >= 0)  // 肩关节（3轴）
-        {
-            ApplyForceToJoint(allJoints[leftShoulderIndex], actions[index++], actions[index++], actions[index++]);
-        }
-        if (leftElbowIndex >= 0)  // 肘关节（1轴）
-        {
-            ApplyForceToJoint(allJoints[leftElbowIndex], actions[index++], 0, 0);
-        }
-        // 右臂
-        if (rightShoulderIndex >= 0)  // 肩关节（3轴）
-        {
-            ApplyForceToJoint(allJoints[rightShoulderIndex], actions[index++], actions[index++], actions[index++]);
-        }
-        if (rightElbowIndex >= 0)  // 肘关节（1轴）
-        {
-            ApplyForceToJoint(allJoints[rightElbowIndex], actions[index++], 0, 0);
-        }
-        //一共22轴
+        Debug.Log("输出维度 " + index);
     }
-
-    /// <summary>
-    /// 应用力矩到单个关节（AI输出[-1,1]范围，映射到[0,1]后再映射到关节角度）
-    /// </summary>
-    private void ApplyForceToJoint(ArticulationBody joint, float xForce, float yForce, float zForce)
+    Vector3 lastVelocity;
+    private void CalculateReward()
     {
-        if (joint == null) return;
+        float pForward = (Vector3.Dot(allJoints[pelvisIndex].transform.forward, orientationCube.forward) + 1) * 0.5f;
+        float pUp = (Vector3.Dot(allJoints[pelvisIndex].transform.up, orientationCube.up) + 1) * 0.5f;
+        float bForward = (Vector3.Dot(allJoints[torsoIndex].transform.forward, orientationCube.forward) + 1) * 0.5f;
 
-        int index = System.Array.IndexOf(allJoints, joint);
-        if (index < 0) return;
+        float facing = pForward * pUp * bForward;
+        Vector3 velocity = GetAvgVelocity();
+        float stable = 1 - Mathf.Pow(velocity.magnitude, 2);
+        Debug.Log("稳定性 " + stable);
 
-        // 获取当前 drive 目标
-        var xDrive = joint.xDrive;
-        var yDrive = joint.yDrive;
-        var zDrive = joint.zDrive;
 
-        xDrive.target = Mathf.Lerp(xDrive.target, xForce * 90, jointLerp);
-        joint.xDrive = xDrive;
-
-        if (joint.jointType == ArticulationJointType.SphericalJoint)
-        {
-            yDrive.target = Mathf.Lerp(yDrive.target, yForce * 90, jointLerp);
-            joint.yDrive = yDrive;
-
-            zDrive.target = Mathf.Lerp(zDrive.target, zForce * 90, jointLerp);
-            joint.zDrive = zDrive;
-        }
-    }
-
-    /// <summary>
-    /// 计算并应用奖励
-    /// </summary>
-    private void CalculateAndApplyReward()
-    {
-        Balance();
-    }
-
-    float lastDist;
-    public void Balance()
-    {
-        standTime += Time.fixedDeltaTime;
-
-        ArticulationBody pelvis = allJoints[pelvisIndex];
-        ArticulationBody body = allJoints[torsoIndex];
-
-        float reward = 0f;
-
-        // ===== 1. 存活奖励（缩小）=====
-        reward += 0.005f;
-
-        // ===== 2. 竖直奖励（降低锁死倾向）=====
-        float upright = Vector3.Dot(pelvis.transform.up, Vector3.up);
-        reward += upright * 0.05f;
-
-        // ===== 3. 重心与支撑关系 =====
-        Vector3 leftFeet = allJoints[leftAnkleIndex].transform.position;
-        Vector3 rightFeet = allJoints[rightAnkleIndex].transform.position;
-
-        Vector2 support1 = new Vector2(leftFeet.x, leftFeet.z);
-        Vector2 support2 = new Vector2(rightFeet.x, rightFeet.z);
-        Vector2 center = new Vector2(worldCenterOfMass.x, worldCenterOfMass.z);
-
-        float dist = PointToSegmentDistance(center, support1, support2);
-
-        // ⭐ 核心1：平衡奖励（exp）
-        float balanceReward = Mathf.Exp(-dist * 5f);
-
-        // ⭐ 核心2：改善趋势
-        float improvement = lastDist - dist;
-
-        reward += balanceReward * 0.3f;
-        reward += improvement * 0.5f;
-
-        // ===== ⭐ 核心3：方向纠正奖励（关键！！！）=====
-        Vector2 velocity = new Vector2(worldCenterOfMassVelocity.x, worldCenterOfMassVelocity.z);
-        Vector2 supportCenter = (support1 + support2) * 0.5f;
-        Vector2 toCenter = supportCenter - center;
-
-        if (velocity.sqrMagnitude > 0.0001f && toCenter.sqrMagnitude > 0.0001f)
-        {
-            float correction = Vector2.Dot(velocity.normalized, toCenter.normalized);
-            reward += correction * 0.3f;
-        }
-
-        lastDist = dist;
-
-        // ===== 4. 高度约束（增强，促进弯膝）=====
-        float heightError = Mathf.Abs(pelvis.transform.position.y - targetHeight);
-        reward -= heightError * heightError * 2f;
-
-        // ===== 5. 双脚离地惩罚（轻微）=====
-        if (!leftFeetOnGround && !rightFeetOnGround)
-        {
-            reward -= 0.02f;
-        }
-
-        // ===== 6. 角速度惩罚（增强，促进柔性）=====
-        reward -= pelvis.angularVelocity.sqrMagnitude * 0.003f;
+        float reward = stable * facing;
 
         AddReward(reward);
-
-        // ===== 7. 终止条件（大幅降低惩罚！！！）=====
-        if (upright < 0.5f)
+        //抖动惩罚：如果当前速度与上一次速度方向相反，说明发生了抖动，给予额外惩罚
+        if (Vector3.Dot(velocity, lastVelocity) < 0)
         {
-            AddReward(-2f);
-            EndEpisode();
-            return;
+            float shakePenalty = Vector3.Distance(velocity, lastVelocity); // 抖动惩罚强度可调整
+            shakePenalty *= shakePenalty;
+            shakePenalty *= 0.5f;
+            Debug.Log("抖动惩罚 " + shakePenalty);
+            AddReward(shakePenalty);
         }
-
-        if (standTime >= targetStandTime)
+        lastVelocity = velocity;
+        Debug.Log("得分 " + reward);
+        if (stable > 0.9f && facing > 0.9f)
         {
-            EndEpisode();
-            return;
-        }
-
-        RandomForce();
-    }
-
-    public void RandomForce()
-    {
-        if (randomForce == 0) return;
-
-        if (Random.value < randomForcefrequency)
-            allJoints[torsoIndex].AddForce(new Vector3(Random.Range(-randomForce, randomForce), 0, Random.Range(-randomForce, randomForce)));
-    }
-
-    public void Move()
-    {
-    }
-
-    /// <summary>
-    /// 检查终止条件
-    /// </summary>
-    private void CheckTermination()
-    {
-        if(closeReset) return;
-        if (robotRoot == null) return;
-
-        if (pelvisOnGround || torsoOnGround)
-        {
-            AddReward(-2f);
-            EndEpisode();
-            return;
-        }
-
-        // ===== 双手触地 =====
-        if (leftHandOnGround || rightHandOnGround)
-        {
-            AddReward(-2f);
-            EndEpisode();
-            return;
-        }
-    }
-
-    /// <summary>
-    /// Heuristic模式（用于人类控制测试）
-    /// </summary>
-    public override void Heuristic(in ActionBuffers actionsOut)
-    {
-        var continuousActions = actionsOut.ContinuousActions;
-
-        // 所有动作默认为0
-        for (int i = 0; i < continuousActions.Length; i++)
-        {
-            continuousActions[i] = 0f;
-        }
-
-        int index = 0;
-
-        // 身体（2轴）- index 0-1
-        if (torsoIndex >= 0)
-        {
-            continuousActions[index++] = Input.GetKey(KeyCode.Alpha1) ? 1f : (Input.GetKey(KeyCode.Alpha2) ? -1f : 0f);
-            continuousActions[index++] = Input.GetKey(KeyCode.Alpha3) ? 1f : (Input.GetKey(KeyCode.Alpha4) ? -1f : 0f);
-        }
-
-        // 左髋（3轴）- index 2-4
-        if (leftHipIndex >= 0)
-        {
-            continuousActions[index++] = Input.GetKey(KeyCode.R) ? 1f : (Input.GetKey(KeyCode.F) ? -1f : 0f);
-            continuousActions[index++] = Input.GetKey(KeyCode.T) ? 1f : (Input.GetKey(KeyCode.G) ? -1f : 0f);
-            continuousActions[index++] = Input.GetKey(KeyCode.Y) ? 1f : (Input.GetKey(KeyCode.H) ? -1f : 0f);
-        }
-
-        // 左膝（1轴）- index 5
-        if (leftKneeIndex >= 0)
-        {
-            continuousActions[index++] = Input.GetKey(KeyCode.U) ? 1f : (Input.GetKey(KeyCode.J) ? -1f : 0f);
-        }
-
-        // 左踝（1轴）- index 6
-        if (leftAnkleIndex >= 0)
-        {
-            continuousActions[index++] = Input.GetKey(KeyCode.I) ? 1f : (Input.GetKey(KeyCode.K) ? -1f : 0f);
-        }
-
-        // 右髋（3轴）- index 7-9
-        if (rightHipIndex >= 0)
-        {
-            continuousActions[index++] = Input.GetKey(KeyCode.O) ? 1f : (Input.GetKey(KeyCode.L) ? -1f : 0f);
-            continuousActions[index++] = Input.GetKey(KeyCode.P) ? 1f : (Input.GetKey(KeyCode.Semicolon) ? -1f : 0f);
-            continuousActions[index++] = Input.GetKey(KeyCode.LeftBracket) ? 1f : (Input.GetKey(KeyCode.RightBracket) ? -1f : 0f);
-        }
-
-        // 右膝（1轴）- index 10
-        if (rightKneeIndex >= 0)
-        {
-            continuousActions[index++] = Input.GetKey(KeyCode.Z) ? 1f : (Input.GetKey(KeyCode.X) ? -1f : 0f);
-        }
-
-        // 右踝（1轴）- index 11
-        if (rightAnkleIndex >= 0)
-        {
-            continuousActions[index++] = Input.GetKey(KeyCode.C) ? 1f : (Input.GetKey(KeyCode.V) ? -1f : 0f);
-        }
-
-        // 左肩（3轴）- index 12-14
-        if (leftShoulderIndex >= 0)
-        {
-            continuousActions[index++] = Input.GetKey(KeyCode.B) ? 1f : (Input.GetKey(KeyCode.N) ? -1f : 0f);
-            continuousActions[index++] = Input.GetKey(KeyCode.M) ? 1f : (Input.GetKey(KeyCode.Comma) ? -1f : 0f);
-            continuousActions[index++] = Input.GetKey(KeyCode.Period) ? 1f : (Input.GetKey(KeyCode.Slash) ? -1f : 0f);
-        }
-
-        // 左肘（1轴）- index 15
-        if (leftElbowIndex >= 0)
-        {
-            continuousActions[index++] = Input.GetKey(KeyCode.Q) ? 1f : (Input.GetKey(KeyCode.W) ? -1f : 0f);
-        }
-
-        // 右肩（3轴）- index 16-18
-        if (rightShoulderIndex >= 0)
-        {
-            continuousActions[index++] = Input.GetKey(KeyCode.E) ? 1f : (Input.GetKey(KeyCode.R) ? -1f : 0f);
-            continuousActions[index++] = Input.GetKey(KeyCode.T) ? 1f : (Input.GetKey(KeyCode.Y) ? -1f : 0f);
-            continuousActions[index++] = Input.GetKey(KeyCode.U) ? 1f : (Input.GetKey(KeyCode.I) ? -1f : 0f);
-        }
-
-        // 右肘（1轴）- index 19
-        if (rightElbowIndex >= 0)
-        {
-            continuousActions[index++] = Input.GetKey(KeyCode.O) ? 1f : (Input.GetKey(KeyCode.P) ? -1f : 0f);
-        }
-
-    }
-    /// <summary>
-    /// 计算点到线段的最短距离
-    /// </summary>
-    private float PointToSegmentDistance(Vector2 point, Vector2 line1, Vector2 line2)
-    {
-        return Vector2.Distance(point, PointToSegmentPoint(point, line1, line2));
-    }
-    private Vector2 PointToSegmentPoint(Vector2 point, Vector2 line1, Vector2 line2)
-    {
-        Vector2 AB = line2 - line1;
-        Vector2 AP = point - line1;
-
-        float abSqr = Vector2.Dot(AB, AB);
-
-        // 防止线段退化为一个点
-        if (abSqr == 0f)
-        {
-            return  line1;
-        }
-
-        float t = Vector2.Dot(AP, AB) / abSqr;
-
-        if (t < 0f)
-        {
-            // 最近点是 line1
-            return  line1;
-        }
-        else if (t > 1f)
-        {
-            // 最近点是 line2
-            return  line2;
+            successTimer += Time.fixedDeltaTime;
         }
         else
         {
-            // 投影点
-            return line1 + t * AB;
+            successTimer = 0f;
         }
-    }
-    /// <summary>
-    /// 计算点到线段的最短距离
-    /// 高性能版，（避免 sqrt）
-    /// </summary>
-    private float PointToSegmentDistanceSqr(Vector2 point, Vector2 line1, Vector2 line2)
-    {
-        Vector2 AB = line2 - line1;
-        Vector2 AP = point - line1;
+        //抖动惩罚
+        //float shake = allJoints[pelvisIndex].angularVelocity.sqrMagnitude;
+        //shake += allJoints[torsoIndex].angularVelocity.sqrMagnitude;
+        //shake += allJoints[leftAnkleIndex].angularVelocity.sqrMagnitude;
+        //shake += allJoints[rightAnkleIndex].angularVelocity.sqrMagnitude;
+        //shake *= 0.005f;
+        //AddReward(shake);
+        //Debug.Log("抖动惩罚 " + shake);
 
-        float abSqr = Vector2.Dot(AB, AB);
-
-        if (abSqr == 0f)
+        if (successTimer > 2f)
         {
-            return (point - line1).sqrMagnitude;
+            AddReward(10);
+            orientationCube.rotation = Quaternion.Euler(0, Random.Range(0, 360f), 0);
+            successTimer = 0;
+            episodeTimer = 0;
+            return;
+        }
+    }
+    public override void Heuristic(in ActionBuffers actionsOut)
+    {
+        var continuousActions = actionsOut.ContinuousActions;
+        // 示例：全设为0
+        for (int i = 0; i < continuousActions.Length; i++)
+        {
+            continuousActions[i] = Input.GetAxis("Horizontal"); 
+        }
+    }
+    private void CheckDone()
+    {
+        if (closeReset) return;
+
+        if (pelvisOnGround || torsoOnGround || leftHandOnGround || rightHandOnGround)
+        {
+            AddReward(-2f);
+            EndEpisode();
+            return;
         }
 
-        float t = Vector2.Dot(AP, AB) / abSqr;
-        t = Mathf.Clamp01(t);
-
-        Vector2 projection = line1 + t * AB;
-        return (point - projection).sqrMagnitude;
+        // 检查episode时间是否超限
+        if (episodeTimer >= maxEpisodeTime)
+        {
+            AddReward(-2f);
+            EndEpisode();
+            return;
+        }
     }
-    private void OnDrawGizmos()
+
+    private float NormalizeAngle180(float angle)
     {
-        if (!showDebugInfo || robotRoot == null) return;
-
-#if UNITY_EDITOR
-        Vector3 point1 = allJoints[leftAnkleIndex].transform.position;
-        Vector3 point2 = allJoints[rightAnkleIndex].transform.position;
-        point1.y = 0;
-        point2.y = 0;
-        Debug.DrawLine(point1, point2, Color.green);
-
-        Vector3 velocityOfWorld = allJoints[pelvisIndex].velocity;
-        velocityOfWorld.y = 0;
-        Vector3 centerOfWorld = worldCenterOfMass;
-        centerOfWorld.y = 0;
-        Debug.DrawLine(centerOfWorld, centerOfWorld + velocityOfWorld, Color.blue);
-
-        Vector2 closePointOfSuport2D = PointToSegmentPoint(new Vector2(centerOfWorld.x, centerOfWorld.z) + new Vector2(velocityOfWorld.x, velocityOfWorld.z), new Vector2(point1.x, point1.z), new Vector2(point2.x, point2.z));
-        Vector3 closePointOfSuport = new Vector3(closePointOfSuport2D.x, 0, closePointOfSuport2D.y);
-
-        Debug.DrawLine(centerOfWorld + velocityOfWorld, closePointOfSuport, Color.red);
-#endif
+        angle %= 360f;
+        if (angle > 180f) angle -= 360f;
+        if (angle < -180f) angle += 360f;
+        return angle;
     }
 }

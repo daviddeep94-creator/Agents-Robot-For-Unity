@@ -68,9 +68,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
     [Tooltip("躯干关节刚度 - 身体平衡")]
     [SerializeField] private float torsoJointStiffness = 500.0f;
 
-    [Tooltip("颈部关节刚度 - 头部转动")]
-    [SerializeField] private float neckJointStiffness = 300.0f;
-
     [Header("关节旋转限制(度) - Lower, Upper")]
     // 臀部：前后、左右、扭转
     [SerializeField] private Vector2 pelvisSwingY = new Vector2(-45f, 45f);
@@ -81,11 +78,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
     [SerializeField] private Vector2 torsoSwingY = new Vector2(-45f, 45f);
     [SerializeField] private Vector2 torsoSwingZ = new Vector2(-45f, 45f);
     [SerializeField] private Vector2 torsoTwist = new Vector2(-45f, 45f);
-
-    // 颈部：前后、左右、扭转
-    [SerializeField] private Vector2 neckSwingY = new Vector2(-45f, 45f);
-    [SerializeField] private Vector2 neckSwingZ = new Vector2(-45f, 45f);
-    [SerializeField] private Vector2 neckTwist = new Vector2(-45f, 45f);
 
     // 髋关节：xDrive=前后摆动，yDrive=扭转，zDrive=左右摆动
     [SerializeField] private Vector2 hipTwist = new Vector2(-110.0f, 30.0f);  // 前后摆动(X轴)
@@ -176,8 +168,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         torsoJointStiffness = EditorGUILayout.FloatField("躯干关节刚度", torsoJointStiffness, GUILayout.Width(200));
         EditorGUILayout.EndHorizontal();
 
-        neckJointStiffness = EditorGUILayout.FloatField("颈部关节刚度", neckJointStiffness);
-
         // 关节旋转限制
         EditorGUILayout.Space(10);
         EditorGUILayout.LabelField("关节旋转限制(度) - Lower, Upper", EditorStyles.boldLabel);
@@ -196,14 +186,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         torsoSwingY = EditorGUILayout.Vector2Field("前后", torsoSwingY, GUILayout.Width(200));
         torsoSwingZ = EditorGUILayout.Vector2Field("左右", torsoSwingZ, GUILayout.Width(200));
         torsoTwist = EditorGUILayout.Vector2Field("扭转", torsoTwist, GUILayout.Width(200));
-        EditorGUILayout.EndHorizontal();
-
-        EditorGUILayout.Space(4);
-        EditorGUILayout.LabelField("颈部", EditorStyles.miniBoldLabel);
-        EditorGUILayout.BeginHorizontal();
-        neckSwingY = EditorGUILayout.Vector2Field("前后", neckSwingY, GUILayout.Width(200));
-        neckSwingZ = EditorGUILayout.Vector2Field("左右", neckSwingZ, GUILayout.Width(200));
-        neckTwist = EditorGUILayout.Vector2Field("扭转", neckTwist, GUILayout.Width(200));
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.Space(4);
@@ -956,7 +938,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         shoulderJointStiffness = 10000f;
         elbowJointStiffness = 5000f;
         torsoJointStiffness = 10000f;
-        neckJointStiffness = 3000f;
 
         // 关节旋转限制 - 臀部
         pelvisSwingY = new Vector2(-45f, 45f);
@@ -967,11 +948,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         torsoSwingY = new Vector2(-45f, 45f);
         torsoSwingZ = new Vector2(-45f, 45f);
         torsoTwist = new Vector2(-45f, 45f);
-
-        // 颈部
-        neckSwingY = new Vector2(-45f, 45f);
-        neckSwingZ = new Vector2(-45f, 45f);
-        neckTwist = new Vector2(-45f, 45f);
 
         // 髋关节
         hipTwist = new Vector2(-20f, 90f);
@@ -1073,14 +1049,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         public float torsoTwist_x = -45f;
         public float torsoTwist_y = 45f;
 
-        // 颈部
-        public float neckSwingY_x = -45f;
-        public float neckSwingY_y = 45f;
-        public float neckSwingZ_x = -45f;
-        public float neckSwingZ_y = 45f;
-        public float neckTwist_x = -45f;
-        public float neckTwist_y = 45f;
-
         // 髋关节
         public float hipTwist_x = -20f;
         public float hipTwist_y = 90f;
@@ -1152,7 +1120,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         shoulderJointStiffness = config.shoulderJointStiffness;
         elbowJointStiffness = config.elbowJointStiffness;
         torsoJointStiffness = config.torsoJointStiffness;
-        neckJointStiffness = config.neckJointStiffness;
 
         // 关节旋转限制 - 臀部
         pelvisSwingY = new Vector2(config.pelvisSwingY_x, config.pelvisSwingY_y);
@@ -1163,11 +1130,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         torsoSwingY = new Vector2(config.torsoSwingY_x, config.torsoSwingY_y);
         torsoSwingZ = new Vector2(config.torsoSwingZ_x, config.torsoSwingZ_y);
         torsoTwist = new Vector2(config.torsoTwist_x, config.torsoTwist_y);
-
-        // 颈部
-        neckSwingY = new Vector2(config.neckSwingY_x, config.neckSwingY_y);
-        neckSwingZ = new Vector2(config.neckSwingZ_x, config.neckSwingZ_y);
-        neckTwist = new Vector2(config.neckTwist_x, config.neckTwist_y);
 
         // 髋关节
         hipTwist = new Vector2(config.hipTwist_x, config.hipTwist_y);
@@ -1231,7 +1193,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             shoulderJointStiffness = shoulderJointStiffness,
             elbowJointStiffness = elbowJointStiffness,
             torsoJointStiffness = torsoJointStiffness,
-            neckJointStiffness = neckJointStiffness,
 
             // 关节旋转限制 - 臀部
             pelvisSwingY_x = pelvisSwingY.x,
@@ -1248,14 +1209,6 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             torsoSwingZ_y = torsoSwingZ.y,
             torsoTwist_x = torsoTwist.x,
             torsoTwist_y = torsoTwist.y,
-
-            // 颈部
-            neckSwingY_x = neckSwingY.x,
-            neckSwingY_y = neckSwingY.y,
-            neckSwingZ_x = neckSwingZ.x,
-            neckSwingZ_y = neckSwingZ.y,
-            neckTwist_x = neckTwist.x,
-            neckTwist_y = neckTwist.y,
 
             // 髋关节
             hipTwist_x = hipTwist.x,

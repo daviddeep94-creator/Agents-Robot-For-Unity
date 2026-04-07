@@ -674,7 +674,7 @@ MonoBehaviour:
   randomTilt: 0
   randomForce: 10
   randomForceFrequency: 0.1
-  targetLerp: 0.3
+  targetLerp: 1
   closeReset: 0
   leftHandEmpty: {fileID: 0}
   rightHandEmpty: {fileID: 0}
@@ -737,7 +737,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3a5c9d521e5ef4759a8246a07d52221e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  DecisionPeriod: 1
+  DecisionPeriod: 5
   TakeActionsBetweenDecisions: 1
 --- !u!1 &547516881
 GameObject:

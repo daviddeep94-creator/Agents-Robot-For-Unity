@@ -315,7 +315,7 @@ public class RobotBalanceAgent : Agent
             shakePenalty *= shakePenalty;
             shakePenalty *= 0.5f;
             Debug.Log("抖动惩罚 " + shakePenalty);
-            AddReward(shakePenalty);
+            AddReward(-shakePenalty);
         }
         lastVelocity = velocity;
         Debug.Log("得分 " + reward);

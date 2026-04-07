@@ -4,6 +4,8 @@ Temp/
 /obj/Debug/
 /Build/
 .vs/
+*.csproj
 
 logs/
 run_logs/
+*.meta

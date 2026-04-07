@@ -24,7 +24,8 @@ public class RobotBalanceAgent : Agent
 
     [SerializeField] private float randomForce = 10f;
     [SerializeField] private float randomForceFrequency = 0.1f;
-
+    [Header("目标角度Lerp")]
+    [SerializeField] private float targetLerp = 0.5f;
     [Header("关闭重置")]
     [SerializeField] private bool closeReset = false;
 
@@ -274,7 +275,8 @@ public class RobotBalanceAgent : Agent
 
             float tX = Mathf.Clamp01((actions[index++] + 1f) / 2f);
             ArticulationDrive xDrive = joint.xDrive;
-            xDrive.target = Mathf.Lerp(joint.xDrive.lowerLimit, joint.xDrive.upperLimit, tX);
+            float target = Mathf.Lerp(joint.xDrive.lowerLimit, joint.xDrive.upperLimit, tX);
+            xDrive.target = Mathf.Lerp(xDrive.target, target, targetLerp);
             joint.xDrive = xDrive;
             if (joint.jointType == ArticulationJointType.SphericalJoint)
             {
@@ -282,11 +284,13 @@ public class RobotBalanceAgent : Agent
                 float tZ = Mathf.Clamp01((actions[index++] + 1f) / 2f);
 
                 ArticulationDrive yDrive = joint.yDrive;
-                yDrive.target = Mathf.Lerp(joint.yDrive.lowerLimit, joint.yDrive.upperLimit, tY);
+                target = Mathf.Lerp(joint.yDrive.lowerLimit, joint.yDrive.upperLimit, tY);
+                yDrive.target = Mathf.Lerp(yDrive.target, target, targetLerp);
                 joint.yDrive = yDrive;
 
                 ArticulationDrive zDrive = joint.zDrive;
-                zDrive.target = Mathf.Lerp(joint.zDrive.lowerLimit, joint.zDrive.upperLimit, tZ);
+                target = Mathf.Lerp(joint.zDrive.lowerLimit, joint.zDrive.upperLimit, tZ);
+                zDrive.target = Mathf.Lerp(zDrive.target, target, targetLerp);
                 joint.zDrive = zDrive;
             }
         }

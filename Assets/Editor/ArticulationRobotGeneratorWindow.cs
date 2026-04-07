@@ -38,6 +38,10 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
     [Tooltip("脚板尺寸（长×宽×高），归一化值。")]
     [SerializeField] private Vector3 footSizeNormalized = new Vector3(0.06f, 0.0286f, 0.15f);
 
+    [Header("摩擦力")]
+    [Tooltip("脚部摩擦系数，0-1之间，默认为0.9。")]
+    [SerializeField] private float footFriction = 0.9f;
+
     [Header("质量与阻尼")]
     [SerializeField] private float totalMassKg = 60.0f;
     [SerializeField] private float angularDamping = 2.0f;
@@ -138,6 +142,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         EditorGUILayout.EndHorizontal();
 
         footSizeNormalized = EditorGUILayout.Vector3Field("脚板尺寸", footSizeNormalized);
+        footFriction = EditorGUILayout.Slider("脚部摩擦", footFriction, 0f, 1f, GUILayout.Width(200));
 
         // 质量与阻尼
         EditorGUILayout.Space(10);
@@ -438,13 +443,15 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             hipJointLocalYInPelvis, kneeJointLocalYInPelvis, ankleJointLocalYInPelvis,
             angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
             hipJointStiffness, kneeJointStiffness, initialKneeBendAngle, ankleJointStiffness,
-            hipTwist, hipSwingY, hipSwingZ, kneeTwist, ankleTwist, ankleSwingY, ankleSwingZ);
+            hipTwist, hipSwingY, hipSwingZ, kneeTwist, ankleTwist, ankleSwingY, ankleSwingZ,
+            footFriction);
         CreateLeg(pelvis.transform, "Right", legOffsetX, upperLegVisualSize, lowerLegVisualSize, footSize,
             upperLegLength, lowerLegLength, upperLegMass, lowerLegMass, footMass,
             hipJointLocalYInPelvis, kneeJointLocalYInPelvis, ankleJointLocalYInPelvis,
             angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
             hipJointStiffness, kneeJointStiffness, initialKneeBendAngle, ankleJointStiffness,
-            hipTwist, Reverse(hipSwingY), Reverse(hipSwingZ), kneeTwist, ankleTwist, Reverse(ankleSwingY), Reverse(ankleSwingZ));
+            hipTwist, Reverse(hipSwingY), Reverse(hipSwingZ), kneeTwist, ankleTwist, Reverse(ankleSwingY), Reverse(ankleSwingZ),
+            footFriction);
 
         CreateArm(torso.transform, "Left", -(shoulderOffsetX + upperArmVisualSize.x * 0.5f), upperArmVisualSize, lowerArmVisualSize,
             upperArmLength, lowerArmLength, upperArmMass, lowerArmMass,
@@ -494,7 +501,8 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         Vector2 kneeTwist,
         Vector2 ankleTwist,
         Vector2 ankleSwingY,
-        Vector2 ankleSwingZ)
+        Vector2 ankleSwingZ,
+        float footFriction = 0.9f)
     {
         // 计算膝盖弯曲的角度（转换为弧度）
         float kneeBendRad = initialKneeBendAngleDeg;
@@ -583,7 +591,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         ankleJoint.transform.localRotation = Quaternion.Euler(-initialKneeBendAngleDeg * 0.5f, 0, 0);
 
         // 在踝关节节点下添加脚板视觉/碰撞实体
-        CreateVisualCollider(ankleJoint.transform, side + "_Foot_Visual", footSize, new Vector3(0, -footSize.y * 0.5f, footSize.z * 0.3f));
+        CreateVisualCollider(ankleJoint.transform, side + "_Foot_Visual", footSize, new Vector3(0, -footSize.y * 0.5f, footSize.z * 0.3f), footFriction);
     }
 
     private static void CreateArm(
@@ -837,7 +845,8 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         Transform parent,
         string name,
         Vector3 size,
-        Vector3 localPos)
+        Vector3 localPos,
+        float friction = 0.5f)
     {
         GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
         go.name = name;
@@ -850,9 +859,32 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         var renderer = go.GetComponent<Renderer>();
         renderer.enabled = true;
 
+        // 设置脚部摩擦系数
+        if (friction > 0)
+        {
+            Collider col = go.GetComponent<Collider>();
+            if (col != null)
+            {
+                col.material = CreatePhysicMaterial(friction);
+            }
+        }
+
         // 实体不需要 ArticulationBody，只需要 Collider
         var articulation = go.GetComponent<ArticulationBody>();
         DestroyImmediate(articulation);
+    }
+
+    /// <summary>
+    /// 创建物理材质
+    /// </summary>
+    private static PhysicMaterial CreatePhysicMaterial(float friction)
+    {
+        PhysicMaterial mat = new PhysicMaterial();
+        mat.dynamicFriction = friction;
+        mat.staticFriction = friction;
+        mat.bounciness = 0f;
+        mat.frictionCombine = PhysicMaterialCombine.Maximum;
+        return mat;
     }
 
     /// <summary>

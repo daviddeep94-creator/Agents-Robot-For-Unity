@@ -313,15 +313,15 @@ public class RobotBalanceAgent : Agent
 
         AddReward(reward);
         //抖动惩罚：如果当前速度与上一次速度方向相反，说明发生了抖动，给予额外惩罚
-        if (Vector3.Dot(velocity, lastVelocity) < 0)
-        {
-            float shakePenalty = Vector3.Distance(velocity, lastVelocity); // 抖动惩罚强度可调整
-            shakePenalty *= shakePenalty;
-            shakePenalty *= 0.5f;
-            Debug.Log("抖动惩罚 " + shakePenalty);
-            AddReward(-shakePenalty);
-        }
-        lastVelocity = velocity;
+        //if (Vector3.Dot(velocity, lastVelocity) < 0)
+        //{
+        //    float shakePenalty = Vector3.Distance(velocity, lastVelocity); // 抖动惩罚强度可调整
+        //    shakePenalty *= shakePenalty;
+        //    shakePenalty *= 0.5f;
+        //    Debug.Log("抖动惩罚 " + shakePenalty);
+        //    AddReward(-shakePenalty);
+        //}
+        //lastVelocity = velocity;
         Debug.Log("得分 " + reward);
         if (stable > 0.9f && facing > 0.9f)
         {

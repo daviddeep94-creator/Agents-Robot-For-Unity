@@ -201,8 +201,8 @@ public class RobotBalanceAgent : Agent
 
         var pelvis = allJoints[pelvisIndex];
         // pelvis朝向参考
-        sensor.AddObservation(Quaternion.FromToRotation(allJoints[pelvisIndex].transform.forward, orientationCube.forward));
-
+        sensor.AddObservation(Quaternion.Inverse(allJoints[pelvisIndex].transform.rotation) * orientationCube.rotation);
+        sensor.AddObservation(Quaternion.Inverse(allJoints[torsoIndex].transform.rotation) * orientationCube.rotation);
         // 手
         Vector3 leftHand = orientationCube.InverseTransformPoint(leftHandEmpty.position);
         Vector3 rightHand = orientationCube.InverseTransformPoint(rightHandEmpty.position);
@@ -217,13 +217,11 @@ public class RobotBalanceAgent : Agent
             sensor.AddObservation(orientationCube.transform.InverseTransformDirection(joint.velocity));
             sensor.AddObservation(orientationCube.transform.InverseTransformDirection(joint.angularVelocity));
             //在我们的方向立方体空间中获取相对于臀部的位置
-            sensor.AddObservation(orientationCube.transform.InverseTransformDirection(joint.worldCenterOfMass - allJoints[pelvisIndex].worldCenterOfMass));
+            sensor.AddObservation(orientationCube.transform.InverseTransformDirection(joint.worldCenterOfMass - allJoints[pelvisIndex].transform.position));
 
             if (joint.jointType != ArticulationJointType.FixedJoint)
             {
-                sensor.AddObservation(NormalizeAngle180(joint.transform.localRotation.eulerAngles.x) / 180f);
-                sensor.AddObservation(NormalizeAngle180(joint.transform.localRotation.eulerAngles.y) / 180f);
-                sensor.AddObservation(NormalizeAngle180(joint.transform.localRotation.eulerAngles.z) / 180f);
+                sensor.AddObservation(transform.localRotation);
                 sensor.AddObservation(joint.xDrive.stiffness / maxStiffness);
             }
         }
@@ -299,11 +297,10 @@ public class RobotBalanceAgent : Agent
     Vector3 lastVelocity;
     private void CalculateReward()
     {
-        float pForward = (Vector3.Dot(allJoints[pelvisIndex].transform.forward, orientationCube.forward) + 1) * 0.5f;
-        float pUp = (Vector3.Dot(allJoints[pelvisIndex].transform.up, orientationCube.up) + 1) * 0.5f;
-        float bForward = (Vector3.Dot(allJoints[torsoIndex].transform.forward, orientationCube.forward) + 1) * 0.5f;
+        float pAngle = 1 - Quaternion.Angle(allJoints[pelvisIndex].transform.rotation, orientationCube.rotation) / 180f;
+        float tAngle = 1 - Quaternion.Angle(allJoints[torsoIndex].transform.rotation, orientationCube.rotation) / 180f;
 
-        float facing = pForward * pUp * bForward;
+        float facing = pAngle * tAngle;
         Vector3 velocity = GetAvgVelocity();
         float stable = 1 - Mathf.Pow(velocity.magnitude, 2);
         Debug.Log("稳定性 " + stable);
@@ -312,6 +309,25 @@ public class RobotBalanceAgent : Agent
         float reward = stable * facing;
 
         AddReward(reward);
+
+        Debug.Log("得分 " + reward);
+        if (stable > 0.9f && facing > 0.9f)
+        {
+            successTimer += Time.fixedDeltaTime;
+        }
+        else
+        {
+            successTimer = 0f;
+        }
+
+        if (successTimer > 2f)
+        {
+            AddReward(10);
+            orientationCube.rotation = Quaternion.Euler(0, Random.Range(0, 360f), 0);
+            successTimer = 0;
+            episodeTimer = 0;
+            return;
+        }
         //抖动惩罚：如果当前速度与上一次速度方向相反，说明发生了抖动，给予额外惩罚
         //if (Vector3.Dot(velocity, lastVelocity) < 0)
         //{
@@ -322,15 +338,6 @@ public class RobotBalanceAgent : Agent
         //    AddReward(-shakePenalty);
         //}
         //lastVelocity = velocity;
-        Debug.Log("得分 " + reward);
-        if (stable > 0.9f && facing > 0.9f)
-        {
-            successTimer += Time.fixedDeltaTime;
-        }
-        else
-        {
-            successTimer = 0f;
-        }
         //抖动惩罚
         //float shake = allJoints[pelvisIndex].angularVelocity.sqrMagnitude;
         //shake += allJoints[torsoIndex].angularVelocity.sqrMagnitude;
@@ -339,15 +346,6 @@ public class RobotBalanceAgent : Agent
         //shake *= 0.005f;
         //AddReward(shake);
         //Debug.Log("抖动惩罚 " + shake);
-
-        if (successTimer > 2f)
-        {
-            AddReward(10);
-            orientationCube.rotation = Quaternion.Euler(0, Random.Range(0, 360f), 0);
-            successTimer = 0;
-            episodeTimer = 0;
-            return;
-        }
     }
     public override void Heuristic(in ActionBuffers actionsOut)
     {

@@ -1,8 +1,11 @@
+using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
 using Unity.MLAgents.Sensors;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 public enum TargetType
 {
@@ -155,7 +158,8 @@ public class RobotBalanceAgent : Agent
         }
 
         // 随机Y轴旋转
-        allJoints[pelvisIndex].transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+        if (!closeReset)
+            allJoints[pelvisIndex].transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
 
 
         allJoints[pelvisIndex].gameObject.SetActive(true);
@@ -194,6 +198,10 @@ public class RobotBalanceAgent : Agent
         orientationCube.position = allJoints[pelvisIndex].transform.position;
         //布娃娃的平均速度
         var avgVel = GetAvgVelocity();
+        if (float.IsNaN(avgVel.magnitude))
+        {
+            return;
+        }
         //当前布娃娃速度，归一化
         sensor.AddObservation(avgVel.magnitude);
         //相对于立方体的平均身体速度
@@ -265,6 +273,7 @@ public class RobotBalanceAgent : Agent
 
     private void ApplyJointForces(ActionSegment<float> actions)
     {
+        if(closeReset) return;
         int index = 0;
         for (int i = 0; i < allJoints.Length; i++)
         {
@@ -299,9 +308,22 @@ public class RobotBalanceAgent : Agent
     {
         float pAngle = 1 - Quaternion.Angle(allJoints[pelvisIndex].transform.rotation, orientationCube.rotation) / 180f;
         float tAngle = 1 - Quaternion.Angle(allJoints[torsoIndex].transform.rotation, orientationCube.rotation) / 180f;
-
+        Debug.Log($"pAngle: {pAngle} tAngle: {tAngle}" );
         float facing = pAngle * tAngle;
         Vector3 velocity = GetAvgVelocity();
+
+        //检查NaN值
+        if (float.IsNaN(velocity.magnitude))
+        {
+            EndEpisode();
+            AddReward(-10);
+            throw new ArgumentException(
+                "moveTowardsTargetReward中出现NaN。\n" +
+                $" cubeForward: {orientationCube.forward}\n" +
+                $" hips.velocity: {allJoints[pelvisIndex].velocity}\n" 
+            );
+        }
+
         float stable = 1 - Mathf.Pow(velocity.magnitude, 2);
         Debug.Log("稳定性 " + stable);
 
@@ -323,7 +345,8 @@ public class RobotBalanceAgent : Agent
         if (successTimer > 2f)
         {
             AddReward(10);
-            orientationCube.rotation = Quaternion.Euler(0, Random.Range(0, 360f), 0);
+            if (!closeReset)
+                orientationCube.rotation = Quaternion.Euler(0, Random.Range(0, 360f), 0);
             successTimer = 0;
             episodeTimer = 0;
             return;

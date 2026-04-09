@@ -29,6 +29,9 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
     [Tooltip("臀部宽度，归一化值。")]
     [SerializeField] private float pelvisWidthNormalized = 0.17f;
 
+    [Tooltip("腿间距（两腿之间的距离），归一化值。")]
+    [SerializeField] private float legOffsetXNormalized = 0.08f;
+
     [Tooltip("手臂总长度（上臂+前臂），归一化值。")]
     [SerializeField] private float armLengthNormalized = 0.428f;
 
@@ -46,6 +49,22 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
     [SerializeField] private float totalMassKg = 60.0f;
     [SerializeField] private float angularDamping = 2.0f;
     [SerializeField] private float jointFriction = 0.5f;
+
+    [Header("各部位重量分配")]
+    [Tooltip("骨盆重量(kg)")]
+    [SerializeField] private float pelvisMassKg = 5.0f;
+    [Tooltip("躯干重量(kg)")]
+    [SerializeField] private float torsoMassKg = 10.0f;
+    [Tooltip("头部重量(kg)")]
+    [SerializeField] private float headMassKg = 3.0f;
+    [Tooltip("单条大腿重量(kg)")]
+    [SerializeField] private float upperLegMassKg = 3.0f;
+    [Tooltip("单条小腿重量(kg)")]
+    [SerializeField] private float lowerLegMassKg = 2.0f;
+    [Tooltip("单只脚重量(kg)")]
+    [SerializeField] private float footMassKg = 0.5f;
+    [Tooltip("单只手臂重量(kg)")]
+    [SerializeField] private float armMassKg = 2.0f;
 
     [Header("关节驱动参数")]
     [SerializeField] private float passiveJointForceLimit = 1e6f;
@@ -120,6 +139,12 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         GetWindow<ArticulationRobotGeneratorWindow>("Articulation Robot Generator");
     }
 
+    private void OnEnable()
+    {
+        // 每次打开窗口时自动读取配置
+        LoadConfig();
+    }
+
     private void OnGUI()
     {
         scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
@@ -137,7 +162,11 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
 
         EditorGUILayout.BeginHorizontal();
         pelvisWidthNormalized = EditorGUILayout.FloatField("臀部宽度", pelvisWidthNormalized, GUILayout.Width(200));
+        legOffsetXNormalized = EditorGUILayout.FloatField("腿间距", legOffsetXNormalized, GUILayout.Width(200));
         armLengthNormalized = EditorGUILayout.FloatField("手臂长度", armLengthNormalized, GUILayout.Width(200));
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.BeginHorizontal();
         headSizeNormalized = EditorGUILayout.FloatField("头部大小", headSizeNormalized, GUILayout.Width(200));
         EditorGUILayout.EndHorizontal();
 
@@ -155,11 +184,26 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
 
         passiveJointForceLimit = EditorGUILayout.FloatField("关节驱动力上限", passiveJointForceLimit);
 
+        // 各部位重量设置
+        EditorGUILayout.Space(6);
+        EditorGUILayout.LabelField("各部位重量设置", EditorStyles.boldLabel);
+        EditorGUILayout.BeginHorizontal();
+        pelvisMassKg = EditorGUILayout.FloatField("骨盆(kg)", pelvisMassKg, GUILayout.Width(200));
+        torsoMassKg = EditorGUILayout.FloatField("躯干(kg)", torsoMassKg, GUILayout.Width(200));
+        headMassKg = EditorGUILayout.FloatField("头部(kg)", headMassKg, GUILayout.Width(200));
+        EditorGUILayout.EndHorizontal();
+        EditorGUILayout.BeginHorizontal();
+        upperLegMassKg = EditorGUILayout.FloatField("大腿(kg)", upperLegMassKg, GUILayout.Width(200));
+        lowerLegMassKg = EditorGUILayout.FloatField("小腿(kg)", lowerLegMassKg, GUILayout.Width(200));
+        footMassKg = EditorGUILayout.FloatField("脚(kg)", footMassKg, GUILayout.Width(200));
+        EditorGUILayout.EndHorizontal();
+        armMassKg = EditorGUILayout.FloatField("单臂(kg)", armMassKg, GUILayout.Width(200));
+
         // 关节刚度参数
         EditorGUILayout.Space(10);
         EditorGUILayout.LabelField("关节刚度参数 (AI 训练用固定值)", EditorStyles.boldLabel);
 
-        globalStiffnessScale = EditorGUILayout.Slider("全局刚度缩放", globalStiffnessScale, 0.1f, 3.0f);
+        globalStiffnessScale = EditorGUILayout.Slider("全局刚度缩放", globalStiffnessScale, 0.1f, 50f);
 
         EditorGUILayout.BeginHorizontal();
         hipJointStiffness = EditorGUILayout.FloatField("髋关节刚度", hipJointStiffness, GUILayout.Width(200));
@@ -307,7 +351,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         float handThickness = handWidth * 0.6f;
 
         // 左右分布（乘以 robotHeight 归一化）
-        float legOffsetX = robotHeight * 0.04f; // 腿间距约为身高的4%（两脚分开站立）
+        float legOffsetX = robotHeight * legOffsetXNormalized; // 腿间距
         float shoulderOffsetX = torsoWidth * 0.5f; // 肩关节在躯干两侧边缘
 
         // 实体方块尺寸（用于视觉和碰撞）
@@ -320,32 +364,16 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         Vector3 upperArmVisualSize = new Vector3(upperArmThickness, upperArmLength, upperArmThickness);
         Vector3 lowerArmVisualSize = new Vector3(lowerArmThickness, lowerArmLength, lowerArmThickness);
 
-        // 体积占比 -> 质量分配（基于实体方块尺寸）
-        float Volume(Vector3 s) => Mathf.Max(0.000001f, s.x * s.y * s.z);
-        float pelvisVol = Volume(pelvisVisualSize);
-        float torsoVol = Volume(torsoVisualSize);
-        float neckVol = Volume(neckVisualSize);
-        float headVol = Volume(headVisualSize);
-        float upperLegVol = Volume(upperLegVisualSize);
-        float lowerLegVol = Volume(lowerLegVisualSize);
-        float footVol = Volume(footSize);
-        float upperArmVol = Volume(upperArmVisualSize);
-        float lowerArmVol = Volume(lowerArmVisualSize);
-
-        float totalVol = pelvisVol + torsoVol + neckVol + headVol +
-                         2f * (upperLegVol + lowerLegVol + footVol) +
-                         2f * (upperArmVol + lowerArmVol);
-        float MassByVol(float vol) => totalMassKg * (vol / totalVol);
-
-        float pelvisMass = MassByVol(pelvisVol);
-        float torsoMass = MassByVol(torsoVol);
-        float neckMass = MassByVol(neckVol);
-        float headMass = MassByVol(headVol);
-        float upperLegMass = MassByVol(upperLegVol);
-        float lowerLegMass = MassByVol(lowerLegVol);
-        float footMass = MassByVol(footVol);
-        float upperArmMass = MassByVol(upperArmVol);
-        float lowerArmMass = MassByVol(lowerArmVol);
+        // 使用各部位单独设置的重量
+        float pelvisMass = pelvisMassKg;
+        float torsoMass = torsoMassKg;
+        float neckMass = 0f; // 颈部质量归入躯干
+        float headMass = headMassKg;
+        float upperLegMass = upperLegMassKg;
+        float lowerLegMass = lowerLegMassKg;
+        float footMass = footMassKg;
+        float upperArmMass = armMassKg * 0.5f;
+        float lowerArmMass = armMassKg * 0.5f;
 
         var existingRoot = GameObject.Find(RobotRootName);
         GameObject root;
@@ -591,7 +619,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         ankleJoint.transform.localRotation = Quaternion.Euler(-initialKneeBendAngleDeg * 0.5f, 0, 0);
 
         // 在踝关节节点下添加脚板视觉/碰撞实体
-        CreateVisualCollider(ankleJoint.transform, side + "_Foot_Visual", footSize, new Vector3(0, -footSize.y * 0.5f, footSize.z * 0.3f), footFriction);
+        CreateVisualCollider(ankleJoint.transform, side + "_Foot_Visual", footSize, new Vector3(0, -footSize.y * 0.5f, footSize.z * 0.2f), footFriction);
     }
 
     private static void CreateArm(
@@ -952,15 +980,25 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         torsoWidthNormalized = 0.17f;
         torsoDepthNormalized = 0.114f;
         pelvisWidthNormalized = 0.17f;
+        legOffsetXNormalized = 0.08f;
         armLengthNormalized = 0.428f;
         headSizeNormalized = 0.103f;
         footSizeNormalized = new Vector3(0.06f, 0.0286f, 0.15f);
 
         // 质量与阻尼
-        totalMassKg = 30f;
+        totalMassKg = 60f;
         angularDamping = 2f;
         jointFriction = 0.5f;
         passiveJointForceLimit = 1e6f;
+
+        // 各部位重量
+        pelvisMassKg = 5.0f;
+        torsoMassKg = 10.0f;
+        headMassKg = 3.0f;
+        upperLegMassKg = 3.0f;
+        lowerLegMassKg = 2.0f;
+        footMassKg = 0.5f;
+        armMassKg = 2.0f;
 
         // 关节刚度参数
         globalStiffnessScale = 1.0f;
@@ -1043,6 +1081,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         public float torsoWidthNormalized = 0.17f;
         public float torsoDepthNormalized = 0.114f;
         public float pelvisWidthNormalized = 0.17f;
+        public float legOffsetXNormalized = 0.08f;
         public float armLengthNormalized = 0.428f;
         public float headSizeNormalized = 0.103f;
         public float footSizeNormalized_x = 0.06f;
@@ -1050,10 +1089,19 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         public float footSizeNormalized_z = 0.15f;
 
         // 质量与阻尼
-        public float totalMassKg = 30f;
+        public float totalMassKg = 60f;
         public float angularDamping = 2f;
         public float jointFriction = 0.5f;
         public float passiveJointForceLimit = 1e6f;
+
+        // 各部位重量
+        public float pelvisMassKg = 5.0f;
+        public float torsoMassKg = 10.0f;
+        public float headMassKg = 3.0f;
+        public float upperLegMassKg = 3.0f;
+        public float lowerLegMassKg = 2.0f;
+        public float footMassKg = 0.5f;
+        public float armMassKg = 2.0f;
 
         // 关节刚度参数
         public float globalStiffnessScale = 1.0f;
@@ -1134,6 +1182,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         torsoWidthNormalized = config.torsoWidthNormalized;
         torsoDepthNormalized = config.torsoDepthNormalized;
         pelvisWidthNormalized = config.pelvisWidthNormalized;
+        legOffsetXNormalized = config.legOffsetXNormalized;
         armLengthNormalized = config.armLengthNormalized;
         headSizeNormalized = config.headSizeNormalized;
         footSizeNormalized = new Vector3(config.footSizeNormalized_x, config.footSizeNormalized_y, config.footSizeNormalized_z);
@@ -1143,6 +1192,15 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         angularDamping = config.angularDamping;
         jointFriction = config.jointFriction;
         passiveJointForceLimit = config.passiveJointForceLimit;
+
+        // 各部位重量
+        pelvisMassKg = config.pelvisMassKg;
+        torsoMassKg = config.torsoMassKg;
+        headMassKg = config.headMassKg;
+        upperLegMassKg = config.upperLegMassKg;
+        lowerLegMassKg = config.lowerLegMassKg;
+        footMassKg = config.footMassKg;
+        armMassKg = config.armMassKg;
 
         // 关节刚度参数
         globalStiffnessScale = config.globalStiffnessScale;
@@ -1205,6 +1263,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             torsoWidthNormalized = torsoWidthNormalized,
             torsoDepthNormalized = torsoDepthNormalized,
             pelvisWidthNormalized = pelvisWidthNormalized,
+            legOffsetXNormalized = legOffsetXNormalized,
             armLengthNormalized = armLengthNormalized,
             headSizeNormalized = headSizeNormalized,
             footSizeNormalized_x = footSizeNormalized.x,
@@ -1216,6 +1275,15 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             angularDamping = angularDamping,
             jointFriction = jointFriction,
             passiveJointForceLimit = passiveJointForceLimit,
+
+            // 各部位重量
+            pelvisMassKg = pelvisMassKg,
+            torsoMassKg = torsoMassKg,
+            headMassKg = headMassKg,
+            upperLegMassKg = upperLegMassKg,
+            lowerLegMassKg = lowerLegMassKg,
+            footMassKg = footMassKg,
+            armMassKg = armMassKg,
 
             // 关节刚度参数
             globalStiffnessScale = globalStiffnessScale,

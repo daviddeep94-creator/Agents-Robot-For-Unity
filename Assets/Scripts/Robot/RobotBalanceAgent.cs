@@ -198,10 +198,7 @@ public class RobotBalanceAgent : Agent
         orientationCube.position = allJoints[pelvisIndex].transform.position;
         //布娃娃的平均速度
         var avgVel = GetAvgVelocity();
-        if (float.IsNaN(avgVel.magnitude))
-        {
-            return;
-        }
+
         //当前布娃娃速度，归一化
         sensor.AddObservation(avgVel.magnitude);
         //相对于立方体的平均身体速度
@@ -252,6 +249,13 @@ public class RobotBalanceAgent : Agent
         {
             numOfRb++;
             velSum += item.velocity;
+            //检查NaN值
+            if (float.IsNaN(item.velocity.y))
+            {
+                EndEpisode();
+                AddReward(-10);
+                return Vector3.one * 100;
+            }
         }
 
         var avgVel = velSum / numOfRb;
@@ -306,29 +310,19 @@ public class RobotBalanceAgent : Agent
     Vector3 lastVelocity;
     private void CalculateReward()
     {
+        //Debug.Log($"pelvisIndex相对于orientationCube{(allJoints[pelvisIndex].transform.rotation *orientationCube.rotation).eulerAngles}");
+
         float pAngle = 1 - Quaternion.Angle(allJoints[pelvisIndex].transform.rotation, orientationCube.rotation) / 180f;
         float tAngle = 1 - Quaternion.Angle(allJoints[torsoIndex].transform.rotation, orientationCube.rotation) / 180f;
         Debug.Log($"pAngle: {pAngle} tAngle: {tAngle}" );
         float facing = pAngle * tAngle;
         Vector3 velocity = GetAvgVelocity();
 
-        //检查NaN值
-        if (float.IsNaN(velocity.magnitude))
-        {
-            EndEpisode();
-            AddReward(-10);
-            throw new ArgumentException(
-                "moveTowardsTargetReward中出现NaN。\n" +
-                $" cubeForward: {orientationCube.forward}\n" +
-                $" hips.velocity: {allJoints[pelvisIndex].velocity}\n" 
-            );
-        }
-
         float stable = 1 - Mathf.Pow(velocity.magnitude, 2);
         Debug.Log("稳定性 " + stable);
 
 
-        float reward = stable * facing;
+        float reward = stable + facing;
 
         AddReward(reward);
 
@@ -350,6 +344,10 @@ public class RobotBalanceAgent : Agent
             successTimer = 0;
             episodeTimer = 0;
             return;
+        }
+        if(!leftFeetOnGround && !rightFeetOnGround)
+        {
+            AddReward(-0.5f);
         }
         //抖动惩罚：如果当前速度与上一次速度方向相反，说明发生了抖动，给予额外惩罚
         //if (Vector3.Dot(velocity, lastVelocity) < 0)

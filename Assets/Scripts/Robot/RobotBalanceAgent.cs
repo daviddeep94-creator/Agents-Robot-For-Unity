@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
@@ -50,9 +51,6 @@ public class RobotBalanceAgent : Agent
     private float[] initialJointYTargets;
     private float[] initialJointZTargets;
 
-    private bool leftFeetOnGround, rightFeetOnGround;
-    private bool leftHandOnGround, rightHandOnGround;
-    private bool pelvisOnGround, torsoOnGround;
 
     private float successTimer = 0f;
     private float episodeTimer = 0f;
@@ -62,6 +60,10 @@ public class RobotBalanceAgent : Agent
 
     private void Start()
     {
+        if(orientationCube == null)
+        {
+            orientationCube = new GameObject("OrientationCube").transform;
+        }
         if (robotRoot == null) robotRoot = GetComponentInChildren<ArticulationBody>();
         InitializeRobot();
         RandomTilt();
@@ -173,24 +175,27 @@ public class RobotBalanceAgent : Agent
         allJoints[pelvisIndex].transform.rotation *= Quaternion.Euler(xAngle, 0, zAngle);
     }
 
+    Dictionary<string,bool> bodyOnGround = new Dictionary<string, bool>();
     public void BodyHit(string name)
     {
-        switch (name)
+        if(bodyOnGround.ContainsKey(name))
+            bodyOnGround[name] = true;
+        else
+            bodyOnGround.Add(name, true);
+
+        if (name != "Left_AnkleJoint" && name != "Right_AnkleJoint" && name != "Right_KneeJoint" && name != "Left_KneeJoint")
         {
-            case "Left_AnkleJoint": leftFeetOnGround = true; break;
-            case "Right_AnkleJoint": rightFeetOnGround = true; break;
-            case "Left_ElbowJoint": leftHandOnGround = true; break;
-            case "Right_ElbowJoint": rightHandOnGround = true; break;
-            case "Pelvis_Joint": pelvisOnGround = true; break;
-            case "Torso_Joint": torsoOnGround = true; break;
+            AddReward(-2f);
+            EndEpisode();
         }
     }
 
     public void ClearHit()
     {
-        leftFeetOnGround = rightFeetOnGround = false;
-        leftHandOnGround = rightHandOnGround = false;
-        pelvisOnGround = torsoOnGround = false;
+        foreach (var item in bodyOnGround.Keys.ToArray())
+        {
+            bodyOnGround[item] = false;
+        }
     }
 
     public override void CollectObservations(VectorSensor sensor)
@@ -201,6 +206,8 @@ public class RobotBalanceAgent : Agent
 
         //当前布娃娃速度，归一化
         sensor.AddObservation(avgVel.magnitude);
+        //每帧关节的能量消耗
+        sensor.AddObservation(energy);
         //相对于立方体的平均身体速度
         sensor.AddObservation(orientationCube.transform.InverseTransformDirection(avgVel));
 
@@ -229,14 +236,12 @@ public class RobotBalanceAgent : Agent
                 sensor.AddObservation(transform.localRotation);
                 sensor.AddObservation(joint.xDrive.stiffness / maxStiffness);
             }
-        }
 
-        sensor.AddObservation(leftFeetOnGround);
-        sensor.AddObservation(rightFeetOnGround);
-        sensor.AddObservation(leftHandOnGround);
-        sensor.AddObservation(rightHandOnGround);
-        sensor.AddObservation(pelvisOnGround);
-        sensor.AddObservation(torsoOnGround);
+            if(bodyOnGround.ContainsKey(joint.name))
+                sensor.AddObservation(bodyOnGround[joint.name]);
+            else
+                sensor.AddObservation(false);
+        }
     }
 
     Vector3 GetAvgVelocity()
@@ -274,25 +279,57 @@ public class RobotBalanceAgent : Agent
 
         ClearHit();
     }
+    List<float> lastActions = new List<float>();
+    public float GetLastAction(int index)
+    {
+        if (index < lastActions.Count)
+            return lastActions[index];
+        return 0f;
+    }
+    public float SetLastAction(int index, float value)
+    {
+        if (index < lastActions.Count)
+            lastActions[index] = value;
+        else
+            lastActions.Add(value);
+        return value;
+    }
 
+    public float EnergyConsumption(int index, float action)
+    {
+        float lastAction = GetLastAction(index);
+        float energy = Mathf.Abs(action - lastAction);
+        SetLastAction(index, action);
+        return energy;
+    }
+
+    float energy = 0f;
     private void ApplyJointForces(ActionSegment<float> actions)
     {
         if(closeReset) return;
-        int index = 0;
+        int index = -1;
+        energy = 0f;
         for (int i = 0; i < allJoints.Length; i++)
         {
             var joint = allJoints[i];
             if (joint.jointType == ArticulationJointType.FixedJoint) continue;
 
-            float tX = Mathf.Clamp01((actions[index++] + 1f) / 2f);
+            index++;
+            float tX = Mathf.Clamp01((actions[index] + 1f) / 2f);
+            energy+= EnergyConsumption(index, tX);
+
             ArticulationDrive xDrive = joint.xDrive;
             float target = Mathf.Lerp(joint.xDrive.lowerLimit, joint.xDrive.upperLimit, tX);
             xDrive.target = Mathf.Lerp(xDrive.target, target, targetLerp);
             joint.xDrive = xDrive;
             if (joint.jointType == ArticulationJointType.SphericalJoint)
             {
-                float tY = Mathf.Clamp01((actions[index++] + 1f) / 2f);
-                float tZ = Mathf.Clamp01((actions[index++] + 1f) / 2f);
+                index++;
+                float tY = Mathf.Clamp01((actions[index] + 1f) / 2f);
+                energy += EnergyConsumption(index, tY);
+                index++;
+                float tZ = Mathf.Clamp01((actions[index] + 1f) / 2f);
+                energy += EnergyConsumption(index, tZ);
 
                 ArticulationDrive yDrive = joint.yDrive;
                 target = Mathf.Lerp(joint.yDrive.lowerLimit, joint.yDrive.upperLimit, tY);
@@ -305,17 +342,27 @@ public class RobotBalanceAgent : Agent
                 joint.zDrive = zDrive;
             }
         }
-        Debug.Log("输出维度 " + index);
+        AddReward(-(energy * 0.1f));
+        Debug.Log("能量消耗 " + energy);
+        Debug.Log("输出维度 " + (index + 1));
     }
     Vector3 lastVelocity;
     private void CalculateReward()
     {
         //Debug.Log($"pelvisIndex相对于orientationCube{(allJoints[pelvisIndex].transform.rotation *orientationCube.rotation).eulerAngles}");
+        //float pUp = 1 - Vector3.Angle(allJoints[pelvisIndex].transform.up, orientationCube.up) / 180f;
+        //float pforward = 1 - Vector3.Angle(allJoints[pelvisIndex].transform.forward, orientationCube.forward) / 180f;
 
+        //float tUp = 1 - Vector3.Angle(allJoints[torsoIndex].transform.up, orientationCube.up) / 180f;
+        //float tforward = 1 - Vector3.Angle(allJoints[torsoIndex].transform.forward, orientationCube.forward) / 180f;
+
+        //float facing = (pUp + pforward) * (tUp + tforward);
+        //facing *= 0.25f;
+        orientationCube.position = allJoints[pelvisIndex].transform.position;
         float pAngle = 1 - Quaternion.Angle(allJoints[pelvisIndex].transform.rotation, orientationCube.rotation) / 180f;
         float tAngle = 1 - Quaternion.Angle(allJoints[torsoIndex].transform.rotation, orientationCube.rotation) / 180f;
         Debug.Log($"pAngle: {pAngle} tAngle: {tAngle}" );
-        float facing = pAngle * tAngle;
+        float facing = pAngle * pAngle + tAngle * tAngle;
         Vector3 velocity = GetAvgVelocity();
 
         float stable = 1 - Mathf.Pow(velocity.magnitude, 2);
@@ -325,7 +372,7 @@ public class RobotBalanceAgent : Agent
         float reward = stable + facing;
 
         AddReward(reward);
-
+        //最高得分是3，完全站立不动且朝向正确
         Debug.Log("得分 " + reward);
         if (stable > 0.9f && facing > 0.9f)
         {
@@ -345,10 +392,16 @@ public class RobotBalanceAgent : Agent
             episodeTimer = 0;
             return;
         }
-        if(!leftFeetOnGround && !rightFeetOnGround)
-        {
-            AddReward(-0.5f);
-        }
+
+        float leftFeetZ = orientationCube.InverseTransformPoint(allJoints[leftAnkleIndex].worldCenterOfMass).z;
+        float rightFeetZ = orientationCube.InverseTransformPoint(allJoints[rightAnkleIndex].worldCenterOfMass).z;
+
+        AddReward(-Mathf.Abs(leftFeetZ - rightFeetZ));
+
+        //if(!leftFeetOnGround && !rightFeetOnGround)
+        //{
+        //    AddReward(-0.5f);
+        //}
         //抖动惩罚：如果当前速度与上一次速度方向相反，说明发生了抖动，给予额外惩罚
         //if (Vector3.Dot(velocity, lastVelocity) < 0)
         //{
@@ -380,13 +433,6 @@ public class RobotBalanceAgent : Agent
     private void CheckDone()
     {
         if (closeReset) return;
-
-        if (pelvisOnGround || torsoOnGround || leftHandOnGround || rightHandOnGround)
-        {
-            AddReward(-2f);
-            EndEpisode();
-            return;
-        }
 
         // 检查episode时间是否超限
         if (episodeTimer >= maxEpisodeTime)

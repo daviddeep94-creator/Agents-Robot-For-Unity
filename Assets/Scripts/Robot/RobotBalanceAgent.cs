@@ -33,6 +33,9 @@ public class RobotBalanceAgent : Agent
     [Header("关闭重置")]
     [SerializeField] private bool closeReset = false;
 
+    [Header("能量消耗得分比例")]
+    [SerializeField] private float energyRatio = 0.5f;
+
     private ArticulationBody[] allJoints;
     private float maxStiffness;
     private int pelvisIndex, torsoIndex;
@@ -342,7 +345,7 @@ public class RobotBalanceAgent : Agent
                 joint.zDrive = zDrive;
             }
         }
-        AddReward(-(energy * 0.1f));
+        AddReward(-(energy * energyRatio));
         Debug.Log("能量消耗 " + energy);
         Debug.Log("输出维度 " + (index + 1));
     }

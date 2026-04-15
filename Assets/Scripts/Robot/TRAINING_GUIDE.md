@@ -88,11 +88,11 @@ gamma: 0.995
 #------------家里电脑------------------
 # 方法1：使用双引号包裹完整路径
 mlagents-learn "F:\GameProject\AI Robot\Assets\ML-Agents\training_config.yaml" `
---run-id=RobotBalanceAgent `
+--run-id=RobotWalker `
 --results-dir="F:\GameProject\AI Robot\MLModels" 
 # 使用exe训练
 mlagents-learn "F:\GameProject\AI Robot\Assets\ML-Agents\training_config.yaml" `
---run-id=RobotBalanceAgent `
+--run-id=RobotWalker `
 --env="F:\GameProject\AI Robot\Build\AI Robot.exe" `
 --results-dir="F:\GameProject\AI Robot\Assets\ML-Agents\MLModels" `
 --time-scale=20 `
@@ -104,17 +104,17 @@ mlagents-learn "F:\GameProject\AI Robot\Assets\ML-Agents\training_config.yaml" `
 
 #------------公司电脑------------------
 mlagents-learn "E:\Agents-Robot-For-Unity\Assets\ML-Agents\training_config.yaml" `
---run-id=RobotBalanceAgent `
+--run-id=RobotWalker `
 --results-dir="E:\Agents-Robot-For-Unity\MLModels"
 
 # 方法2：使用相对路径
 C:\Users\Administrator\AppData\Local\Programs\Python\Python310\python.exe -m mlagents-learn "Assets\ML-Agents\training_config.yaml" `
---run-id=RobotBalanceAgent `
+--run-id=RobotWalker `
 --results-dir="Assets\ML-Agents\MLModels" 
 
 # 方法3：使用打包后的exe训练
 mlagents-learn "E:\Agents-Robot-For-Unity\Assets\ML-Agents\training_config.yaml" `
---run-id=RobotBalanceAgent `
+--run-id=RobotWalker `
 --env="E:\Agents-Robot-For-Unity\Build\AI Robot.exe" `
 --results-dir="E:\Agents-Robot-For-Unity\Assets\ML-Agents\MLModels" `
 --time-scale=20 `
@@ -196,7 +196,7 @@ mlagents-learn training_config.yaml --run-id=MovementTraining
 
 ### 关键参数说明
 
-#### RobotBalanceAgent
+#### RobotWalker
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `targetStandTime` | 10秒 | 成功站立的目标时间 |
@@ -307,7 +307,7 @@ A:
 
 ## 脚本说明
 
-### RobotBalanceAgent.cs
+### RobotWalker.cs
 - 功能：平衡训练Agent
 - 关键方法：
   - `CollectObservations()`: 收集状态信息

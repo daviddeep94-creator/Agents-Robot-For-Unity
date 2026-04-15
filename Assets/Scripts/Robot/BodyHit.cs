@@ -4,17 +4,14 @@ using UnityEngine;
 
 public class BodyHit : MonoBehaviour
 {
-    RobotBalanceAgent agent;
+    RobotWalker agent;
 
     private void Awake()
     {
-        agent = GetComponentInParent<RobotBalanceAgent>();
+        agent = GetComponentInParent<RobotWalker>();
     }
     private void OnCollisionStay(Collision collision)
     {
-        if (collision.gameObject.layer == 3)
-        {
-            agent.BodyHit(name);
-        }
+        agent.BodyHit(name, collision);
     }
 }

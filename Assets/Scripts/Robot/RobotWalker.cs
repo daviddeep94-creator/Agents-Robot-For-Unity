@@ -65,6 +65,7 @@ public class RobotWalker : Agent
     private float[] initialJointXTargets;
     private float[] initialJointYTargets;
     private float[] initialJointZTargets;
+    private float[] initialJointStiffness;
 
 
     private float successTimer = 0f;
@@ -158,6 +159,7 @@ public class RobotWalker : Agent
         initialJointXTargets = new float[allJoints.Length];
         initialJointYTargets = new float[allJoints.Length];
         initialJointZTargets = new float[allJoints.Length];
+        initialJointStiffness = new float[allJoints.Length];
 
         for (int i = 0; i < allJoints.Length; i++)
         {
@@ -166,6 +168,8 @@ public class RobotWalker : Agent
             initialJointXTargets[i] = allJoints[i].xDrive.target;
             initialJointYTargets[i] = allJoints[i].yDrive.target;
             initialJointZTargets[i] = allJoints[i].zDrive.target;
+            // 保存初始 stiffness（使用 xDrive 的 stiffness）
+            initialJointStiffness[i] = allJoints[i].xDrive.stiffness;
         }
     }
 
@@ -192,14 +196,17 @@ public class RobotWalker : Agent
 
             var xDrive = allJoints[i].xDrive;
             xDrive.target = initialJointXTargets[i];
+            xDrive.stiffness = initialJointStiffness[i];
             allJoints[i].xDrive = xDrive;
 
             var yDrive = allJoints[i].yDrive;
             yDrive.target = initialJointYTargets[i];
+            yDrive.stiffness = initialJointStiffness[i];
             allJoints[i].yDrive = yDrive;
 
             var zDrive = allJoints[i].zDrive;
             zDrive.target = initialJointZTargets[i];
+            zDrive.stiffness = initialJointStiffness[i];
             allJoints[i].zDrive = zDrive;
         }
 
@@ -322,8 +329,6 @@ public class RobotWalker : Agent
         //相对于立方体的平均身体速度
         sensor.AddObservation(orientationCube.transform.InverseTransformDirection(avgVel));
 
-        //每帧关节的能量消耗
-        sensor.AddObservation(energy);
 
         var pelvis = allJoints[pelvisIndex];
         // pelvis朝向参考
@@ -356,6 +361,9 @@ public class RobotWalker : Agent
             else
                 sensor.AddObservation(false);
         }
+        //每帧关节的能量消耗
+        if (energyRatio != 0)
+            sensor.AddObservation(energy);
     }
 
     Vector3 GetAvgVelocity()
@@ -411,6 +419,7 @@ public class RobotWalker : Agent
 
     public float EnergyConsumption(int index, float action)
     {
+        if (energyRatio == 0) return 0;
         float lastAction = GetLastAction(index);
         float energy = Mathf.Abs(action - lastAction);
         SetLastAction(index, action);
@@ -425,36 +434,55 @@ public class RobotWalker : Agent
         energy = 0f;
         for (int i = 0; i < allJoints.Length; i++)
         {
+            float jointEnergy = 0f;
             var joint = allJoints[i];
             if (joint.jointType == ArticulationJointType.FixedJoint) continue;
 
+            // Stiffness 控制（每个关节一个）
+            index++;
+            float tStiffness = Mathf.Clamp01((actions[index] + 1f) / 2f);
+            float targetStiffness = Mathf.Lerp(0f, initialJointStiffness[i], tStiffness);
+
             index++;
             float tX = Mathf.Clamp01((actions[index] + 1f) / 2f);
-            energy+= EnergyConsumption(index, tX);
+            jointEnergy+= EnergyConsumption(index, tX);
 
             ArticulationDrive xDrive = joint.xDrive;
             float target = Mathf.Lerp(joint.xDrive.lowerLimit, joint.xDrive.upperLimit, tX);
             xDrive.target = Mathf.Lerp(xDrive.target, target, targetLerp);
+            xDrive.stiffness = targetStiffness;
             joint.xDrive = xDrive;
+
             if (joint.jointType == ArticulationJointType.SphericalJoint)
             {
-                index++;
-                float tY = Mathf.Clamp01((actions[index] + 1f) / 2f);
-                energy += EnergyConsumption(index, tY);
-                index++;
-                float tZ = Mathf.Clamp01((actions[index] + 1f) / 2f);
-                energy += EnergyConsumption(index, tZ);
+                if (joint.yDrive.lowerLimit != joint.yDrive.upperLimit)
+                {
+                    index++;
+                    float tY = Mathf.Clamp01((actions[index] + 1f) / 2f);
+                    jointEnergy += EnergyConsumption(index, tY);
 
-                ArticulationDrive yDrive = joint.yDrive;
-                target = Mathf.Lerp(joint.yDrive.lowerLimit, joint.yDrive.upperLimit, tY);
-                yDrive.target = Mathf.Lerp(yDrive.target, target, targetLerp);
-                joint.yDrive = yDrive;
+                    ArticulationDrive yDrive = joint.yDrive;
+                    target = Mathf.Lerp(joint.yDrive.lowerLimit, joint.yDrive.upperLimit, tY);
+                    yDrive.target = Mathf.Lerp(yDrive.target, target, targetLerp);
+                    yDrive.stiffness = targetStiffness; // 三个轴使用同一个 stiffness
+                    joint.yDrive = yDrive;
+                }   
 
-                ArticulationDrive zDrive = joint.zDrive;
-                target = Mathf.Lerp(joint.zDrive.lowerLimit, joint.zDrive.upperLimit, tZ);
-                zDrive.target = Mathf.Lerp(zDrive.target, target, targetLerp);
-                joint.zDrive = zDrive;
+                if (joint.zDrive.lowerLimit != joint.zDrive.upperLimit)
+                {
+                    index++;
+                    float tZ = Mathf.Clamp01((actions[index] + 1f) / 2f);
+                    jointEnergy += EnergyConsumption(index, tZ);
+
+                    ArticulationDrive zDrive = joint.zDrive;
+                    target = Mathf.Lerp(joint.zDrive.lowerLimit, joint.zDrive.upperLimit, tZ);
+                    zDrive.target = Mathf.Lerp(zDrive.target, target, targetLerp);
+                    zDrive.stiffness = targetStiffness; // 三个轴使用同一个 stiffness
+                    joint.zDrive = zDrive;
+                }
             }
+            if (energyRatio != 0)
+                energy += jointEnergy * (targetStiffness / maxStiffness);
         }
         AddReward(-(energy * energyRatio));
         Debug.Log("能量消耗 " + energy);
@@ -466,10 +494,14 @@ public class RobotWalker : Agent
         // 更新 OrientationCube 位置
         UpdateOrientationCubeRotation();
 
-        float pAngle = 1 - Quaternion.Angle(allJoints[pelvisIndex].transform.rotation, orientationCube.rotation) / 180f;
-        float tAngle = 1 - Quaternion.Angle(allJoints[torsoIndex].transform.rotation, orientationCube.rotation) / 180f;
-        Debug.Log($"pAngle: {pAngle} tAngle: {tAngle}" );
-        float facing = pAngle * pAngle + tAngle * tAngle;
+        float pUp = 1 - Vector3.Angle(allJoints[pelvisIndex].transform.up, orientationCube.up) / 180f;
+        float pForward = 1 - Vector3.Angle(allJoints[pelvisIndex].transform.forward, orientationCube.forward) / 180f;
+
+        float tUp = 1 - Vector3.Angle(allJoints[torsoIndex].transform.up, orientationCube.up) / 180f;
+        float tForward = 1 - Vector3.Angle(allJoints[torsoIndex].transform.forward, orientationCube.forward) / 180f;
+
+        Debug.Log($"pAngle: {pUp * pForward} tAngle: {tUp * tForward}" );
+        float facing = pUp * pForward + tUp * tForward;
 
         //布娃娃的平均速度
         var avgVel = GetAvgVelocity();
@@ -508,7 +540,7 @@ public class RobotWalker : Agent
         }
         // 创建字典快照，避免遍历时被修改
         var bodies = bodyOnGround.ToArray();
-        foreach (var body in bodyOnGround)
+        foreach (var body in bodies)
         {
             if (body.Value)
             {

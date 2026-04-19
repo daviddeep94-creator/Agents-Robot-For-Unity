@@ -377,9 +377,8 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
 
         var existingRoot = GameObject.Find(RobotRootName);
         GameObject root;
-        if (existingRoot != null)
+        if (existingRoot != null && replaceExisting)
         {
-            if (!replaceExisting) return;
             // 只删除子对象,保留根节点及其上的脚本和参数
             root = existingRoot;
             root.transform.position = spawnPosition;

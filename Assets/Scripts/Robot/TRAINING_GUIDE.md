@@ -100,6 +100,16 @@ mlagents-learn "F:\GameProject\AI Robot\Assets\ML-Agents\training_config.yaml" `
 --base-port=6000 `
 --no-graphics `
 --resume 
+#官方机器人
+mlagents-learn "F:\GameProject\AI Robot\Assets\ML-Agents\training_config.yaml" `
+--run-id=Walker `
+--env="F:\GameProject\AI Robot\Build\AI Robot.exe" `
+--results-dir="F:\GameProject\AI Robot\Assets\ML-Agents\MLModels" `
+--time-scale=20 `
+--num-envs=15 `
+--base-port=6000 `
+--no-graphics `
+--force
 #------------家里电脑------------------
 
 #------------公司电脑------------------

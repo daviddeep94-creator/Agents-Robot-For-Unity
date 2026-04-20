@@ -43,8 +43,6 @@ public class RobotWalker : Agent
     [Header("能量消耗得分比例")]
     [SerializeField] private float energyRatio = 0.5f;
 
-    [Header("目标碰撞奖励")]
-    [SerializeField] private float targetReachedReward = 5f;
     [Header("目标移动范围")]
     [SerializeField] private float targetSpawnRange = 15f;
 
@@ -288,8 +286,8 @@ public class RobotWalker : Agent
             if (Time.time == hitTime)
                 return;
             // 机器人碰到目标方块
-            AddReward(targetReachedReward);
-            Debug.Log("碰到目标方块！奖励 +" + targetReachedReward);
+            AddReward(1);
+            Debug.Log("碰到目标方块！奖励 +" + 1);
 
             // 将当前位置设置为新的起点
             SetCurrentAsSpawnPoint();
@@ -380,7 +378,7 @@ public class RobotWalker : Agent
             if (float.IsNaN(item.velocity.y))
             {
                 EndEpisode();
-                AddReward(-10);
+                AddReward(-1);
                 return Vector3.one * 100;
             }
         }
@@ -494,14 +492,9 @@ public class RobotWalker : Agent
         // 更新 OrientationCube 位置
         UpdateOrientationCubeRotation();
 
-        float pUp = 1 - Vector3.Angle(allJoints[pelvisIndex].transform.up, orientationCube.up) / 180f;
-        float pForward = 1 - Vector3.Angle(allJoints[pelvisIndex].transform.forward, orientationCube.forward) / 180f;
-
-        float tUp = 1 - Vector3.Angle(allJoints[torsoIndex].transform.up, orientationCube.up) / 180f;
-        float tForward = 1 - Vector3.Angle(allJoints[torsoIndex].transform.forward, orientationCube.forward) / 180f;
-
-        Debug.Log($"pAngle: {pUp * pForward} tAngle: {tUp * tForward}" );
-        float facing = pUp * pForward + tUp * tForward;
+        Vector3 forward = allJoints[torsoIndex].transform.forward;
+        forward.y = 0;
+        float facing = 1 - Vector3.Angle(forward, orientationCube.forward) / 180f;
 
         //布娃娃的平均速度
         var avgVel = GetAvgVelocity();
@@ -510,13 +503,12 @@ public class RobotWalker : Agent
         // 速度匹配奖励：速度越接近目标速度，得分越高
         float speedDiff = Vector3.Distance(avgVel, velGoal);
         float speedReward = 1f - speedDiff / targetSpeed;
-        speedReward *= 2; //放大奖励
         Debug.Log("速度匹配奖励 " + speedReward + " (当前速度: " + avgVel.magnitude + ", 目标速度: " + targetSpeed + ")");
-
-        float reward = speedReward + facing;
+        //最高得分是1，速度匹配奖励乘以朝向奖励，确保只有当朝向正确时才有高分
+        float reward = speedReward * facing;
 
         AddReward(reward);
-        //最高得分是4，完全站立不动且朝向正确
+       
     }
     public override void Heuristic(in ActionBuffers actionsOut)
     {
@@ -532,12 +524,12 @@ public class RobotWalker : Agent
         if (closeReset) return;
 
         // 检查episode时间是否超限
-        if (episodeTimer >= maxEpisodeTime)
-        {
-            AddReward(-2f);
-            EndEpisode();
-            return;
-        }
+        //if (episodeTimer >= maxEpisodeTime)
+        //{
+        //    AddReward(-2f);
+        //    EndEpisode();
+        //    return;
+        //}
         // 创建字典快照，避免遍历时被修改
         var bodies = bodyOnGround.ToArray();
         foreach (var body in bodies)
@@ -546,7 +538,7 @@ public class RobotWalker : Agent
             {
                 if (body.Key != "Left_AnkleJoint" && body.Key != "Right_AnkleJoint" && body.Key != "Right_KneeJoint" && body.Key != "Left_KneeJoint")
                 {
-                    AddReward(-2f);
+                    AddReward(-1f);
                     EndEpisode();
                 }
             }

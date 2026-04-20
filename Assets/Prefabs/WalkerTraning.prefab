@@ -2203,7 +2203,7 @@ GameObject:
   - component: {fileID: 6660676243778908501}
   - component: {fileID: 6660676243778908500}
   - component: {fileID: 6660676243778908503}
-  m_Layer: 3
+  m_Layer: 0
   m_Name: wall (2)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2300,7 +2300,7 @@ GameObject:
   - component: {fileID: 6660676243786681811}
   - component: {fileID: 6660676243786681810}
   - component: {fileID: 6660676243786681813}
-  m_Layer: 3
+  m_Layer: 0
   m_Name: wall (3)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2507,14 +2507,15 @@ MonoBehaviour:
   robotRoot: {fileID: 1722677289534972921}
   orientationCube: {fileID: 0}
   targetCube: {fileID: 0}
-  targetSpeed: 1.2
+  m_maxWalkingSpeed: 10
+  randomizeWalkSpeedEachEpisode: 1
   randomTilt: 1
   randomForce: 10
   randomForceFrequency: 0.1
   targetLerp: 1
   closeReset: 0
   energyRatio: 0
-  targetSpawnRange: 15
+  targetSpawnRange: 12
   leftHandEmpty: {fileID: 0}
   rightHandEmpty: {fileID: 0}
   maxEpisodeTime: 50
@@ -2530,7 +2531,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3a5c9d521e5ef4759a8246a07d52221e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  DecisionPeriod: 3
+  DecisionPeriod: 5
   TakeActionsBetweenDecisions: 0
 --- !u!1 &6660676245537661278
 GameObject:
@@ -2544,7 +2545,7 @@ GameObject:
   - component: {fileID: 6660676245537661274}
   - component: {fileID: 6660676245537661277}
   - component: {fileID: 6660676245537661276}
-  m_Layer: 3
+  m_Layer: 0
   m_Name: wall (1)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2641,7 +2642,7 @@ GameObject:
   - component: {fileID: 6660676245647094672}
   - component: {fileID: 6660676245647094675}
   - component: {fileID: 6660676245647094674}
-  m_Layer: 3
+  m_Layer: 0
   m_Name: wall
   m_TagString: Untagged
   m_Icon: {fileID: 0}

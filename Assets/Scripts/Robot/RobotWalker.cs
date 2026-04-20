@@ -28,7 +28,21 @@ public class RobotWalker : Agent
     [SerializeField] private Rigidbody targetCube;
 
     [Header("目标移动速度 (m/s)")]
-    [SerializeField] private float targetSpeed = 1f;
+    [SerializeField] private float m_maxWalkingSpeed = 10f;
+
+    //目标行走速度
+    private float m_TargetWalkingSpeed = 10;
+
+    public float MTargetWalkingSpeed // 属性
+    {
+        get { return m_TargetWalkingSpeed; }
+        set { m_TargetWalkingSpeed = Mathf.Clamp(value, .1f, m_maxWalkingSpeed); }
+    }
+    //智能体是否每个回合采样一个新的目标速度？
+    //如果为true，walkSpeed将在OnEpisodeBegin()中在0到m_maxWalkingSpeed之间随机设置
+    //如果为false，目标速度将是walkingSpeed
+    [Header("智能体是否每个回合采样一个新的目标速度？")]
+    public bool randomizeWalkSpeedEachEpisode;
 
     [Header("重置随机角")]
     [SerializeField] private bool randomTilt = true;
@@ -220,6 +234,9 @@ public class RobotWalker : Agent
         allJoints[pelvisIndex].transform.rotation = Quaternion.Euler(0f, spawnYRotation, 0f);
 
         allJoints[pelvisIndex].gameObject.SetActive(true);
+
+        //设置我们的目标行走速度
+        MTargetWalkingSpeed = randomizeWalkSpeedEachEpisode ? Random.Range(0.1f, m_maxWalkingSpeed) : MTargetWalkingSpeed;
     }
 
     /// <summary>
@@ -321,7 +338,7 @@ public class RobotWalker : Agent
         //布娃娃的平均速度
         var avgVel = GetAvgVelocity();
         //我们要匹配的目标速度
-        var velGoal = orientationCube.forward * targetSpeed;
+        var velGoal = orientationCube.forward * MTargetWalkingSpeed;
         //当前布娃娃速度，归一化
         sensor.AddObservation(Vector3.Distance(velGoal, avgVel));
         //相对于立方体的平均身体速度
@@ -492,24 +509,33 @@ public class RobotWalker : Agent
         // 更新 OrientationCube 位置
         UpdateOrientationCubeRotation();
 
+        var cubeForward = orientationCube.transform.forward;
+
+        // 根据以下元素的组合为此步骤设置奖励
+        // a. 匹配目标速度
+        //如果完美匹配，该奖励将接近1，如果偏离则接近0
+        var matchSpeedReward = GetMatchingVelocityReward(cubeForward * MTargetWalkingSpeed, GetAvgVelocity());
+
         Vector3 forward = allJoints[torsoIndex].transform.forward;
         forward.y = 0;
-        float facing = 1 - Vector3.Angle(forward, orientationCube.forward) / 180f;
+        float facing = (Vector3.Dot(forward, orientationCube.forward) + 1) * .5f;
 
-        //布娃娃的平均速度
-        var avgVel = GetAvgVelocity();
-        //我们要匹配的目标速度
-        var velGoal = orientationCube.forward * targetSpeed;
-        // 速度匹配奖励：速度越接近目标速度，得分越高
-        float speedDiff = Vector3.Distance(avgVel, velGoal);
-        float speedReward = 1f - speedDiff / targetSpeed;
-        Debug.Log("速度匹配奖励 " + speedReward + " (当前速度: " + avgVel.magnitude + ", 目标速度: " + targetSpeed + ")");
         //最高得分是1，速度匹配奖励乘以朝向奖励，确保只有当朝向正确时才有高分
-        float reward = speedReward * facing;
-
-        AddReward(reward);
+        AddReward(matchSpeedReward * facing);
        
     }
+
+    //平均速度与目标行走速度差异的归一化值
+    public float GetMatchingVelocityReward(Vector3 velocityGoal, Vector3 actualVelocity)
+    {
+        //实际速度与目标速度之间的距离
+        var velDeltaMagnitude = Mathf.Clamp(Vector3.Distance(actualVelocity, velocityGoal), 0, MTargetWalkingSpeed);
+
+        //返回一条从1衰减到0的下降S形曲线上的值
+        //如果完美匹配，该奖励将接近1，如果偏离则接近0
+        return Mathf.Pow(1 - Mathf.Pow(velDeltaMagnitude / MTargetWalkingSpeed, 2), 2);
+    }
+
     public override void Heuristic(in ActionBuffers actionsOut)
     {
         var continuousActions = actionsOut.ContinuousActions;

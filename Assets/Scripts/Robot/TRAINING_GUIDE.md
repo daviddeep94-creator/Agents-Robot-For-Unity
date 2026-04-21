@@ -85,48 +85,15 @@ gamma: 0.995
 ### 训练命令
 
 ```bash
-#------------家里电脑------------------
-# 方法1：使用双引号包裹完整路径
-mlagents-learn "F:\GameProject\AI Robot\Assets\ML-Agents\training_config.yaml" `
---run-id=RobotWalker `
---results-dir="F:\GameProject\AI Robot\MLModels" 
-# 使用exe训练
-mlagents-learn "F:\GameProject\AI Robot\Assets\ML-Agents\training_config.yaml" `
---run-id=RobotWalker `
---env="F:\GameProject\AI Robot\Build\AI Robot.exe" `
---results-dir="F:\GameProject\AI Robot\Assets\ML-Agents\MLModels" `
---time-scale=20 `
---num-envs=15 `
---base-port=6000 `
---no-graphics `
---resume 
-#官方机器人
-mlagents-learn "F:\GameProject\AI Robot\Assets\ML-Agents\training_config.yaml" `
---run-id=Walker `
---env="F:\GameProject\AI Robot\Build\AI Robot.exe" `
---results-dir="F:\GameProject\AI Robot\Assets\ML-Agents\MLModels" `
---time-scale=20 `
---num-envs=15 `
---base-port=6000 `
---no-graphics `
---force
-#------------家里电脑------------------
+# 公司电脑
+CD "C:\private\Agents-Robot-For-Unity"
+ #家里电脑
+CD "F:\GameProject\AI Robot"
 
-#------------公司电脑------------------
-mlagents-learn "E:\Agents-Robot-For-Unity\Assets\ML-Agents\training_config.yaml" `
+mlagents-learn "Assets\ML-Agents\training_config.yaml" `
 --run-id=RobotWalker `
---results-dir="E:\Agents-Robot-For-Unity\MLModels"
-
-# 方法2：使用相对路径
-C:\Users\Administrator\AppData\Local\Programs\Python\Python310\python.exe -m mlagents-learn "Assets\ML-Agents\training_config.yaml" `
---run-id=RobotWalker `
---results-dir="Assets\ML-Agents\MLModels" 
-
-# 方法3：使用打包后的exe训练
-mlagents-learn "E:\Agents-Robot-For-Unity\Assets\ML-Agents\training_config.yaml" `
---run-id=RobotWalker `
---env="E:\Agents-Robot-For-Unity\Build\AI Robot.exe" `
---results-dir="E:\Agents-Robot-For-Unity\Assets\ML-Agents\MLModels" `
+--env="Build\AI Robot.exe" `
+--results-dir="Assets\ML-Agents\MLModels" `
 --time-scale=20 `
 --num-envs=15 `
 --base-port=6000 `

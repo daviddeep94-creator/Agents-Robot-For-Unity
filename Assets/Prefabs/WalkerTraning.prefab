@@ -2507,7 +2507,7 @@ MonoBehaviour:
   robotRoot: {fileID: 1722677289534972921}
   orientationCube: {fileID: 0}
   targetCube: {fileID: 0}
-  m_maxWalkingSpeed: 20
+  m_maxWalkingSpeed: 10
   randomizeWalkSpeedEachEpisode: 1
   randomTilt: 1
   randomForce: 10

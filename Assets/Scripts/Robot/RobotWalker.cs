@@ -523,8 +523,15 @@ public class RobotWalker : Agent
         //最高得分是1，速度匹配奖励乘以朝向奖励，确保只有当朝向正确时才有高分
         AddReward(matchSpeedReward * facing);
        
+        float leftFeetZ = orientationCube.transform.InverseTransformPoint(allJoints[leftAnkleIndex].transform.position).z;
+        float rightFeetZ = orientationCube.transform.InverseTransformPoint(allJoints[rightAnkleIndex].transform.position).z;
+        bool leftFoward = leftFeetZ > rightFeetZ;
+        //如果发生一次交叉就给奖励，如果ai钻漏洞，降低分数
+        if (leftFoward != lastLeftFoward)
+            AddReward(0.2f);
+        lastLeftFoward = leftFoward;
     }
-
+    bool lastLeftFoward;
     //平均速度与目标行走速度差异的归一化值
     public float GetMatchingVelocityReward(Vector3 velocityGoal, Vector3 actualVelocity)
     {

@@ -122,6 +122,18 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!134 &47116089
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: DynamicMaterial
+  dynamicFriction: 0.5
+  staticFriction: 0.5
+  bounciness: 0
+  frictionCombine: 3
+  bounceCombine: 0
 --- !u!134 &169049020
 PhysicMaterial:
   m_ObjectHideFlags: 0
@@ -131,6 +143,18 @@ PhysicMaterial:
   m_Name: DynamicMaterial
   dynamicFriction: 0.9
   staticFriction: 0.9
+  bounciness: 0
+  frictionCombine: 3
+  bounceCombine: 0
+--- !u!134 &213184487
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: DynamicMaterial
+  dynamicFriction: 0.5
+  staticFriction: 0.5
   bounciness: 0
   frictionCombine: 3
   bounceCombine: 0
@@ -159,6 +183,18 @@ PhysicMaterial:
   frictionCombine: 3
   bounceCombine: 0
 --- !u!134 &351861782
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: DynamicMaterial
+  dynamicFriction: 0.5
+  staticFriction: 0.5
+  bounciness: 0
+  frictionCombine: 3
+  bounceCombine: 0
+--- !u!134 &435003155
 PhysicMaterial:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -207,6 +243,30 @@ PhysicMaterial:
   frictionCombine: 3
   bounceCombine: 0
 --- !u!134 &613305309
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: DynamicMaterial
+  dynamicFriction: 0.5
+  staticFriction: 0.5
+  bounciness: 0
+  frictionCombine: 3
+  bounceCombine: 0
+--- !u!134 &618674151
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: DynamicMaterial
+  dynamicFriction: 0.5
+  staticFriction: 0.5
+  bounciness: 0
+  frictionCombine: 3
+  bounceCombine: 0
+--- !u!134 &626880229
 PhysicMaterial:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -333,6 +393,18 @@ PhysicMaterial:
   m_Name: DynamicMaterial
   dynamicFriction: 0.5
   staticFriction: 0.5
+  bounciness: 0
+  frictionCombine: 3
+  bounceCombine: 0
+--- !u!134 &795369181
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: DynamicMaterial
+  dynamicFriction: 0.9
+  staticFriction: 0.9
   bounciness: 0
   frictionCombine: 3
   bounceCombine: 0
@@ -539,10 +611,26 @@ PrefabInstance:
       propertyPath: m_Material
       value: 
       objectReference: {fileID: 613305309}
+    - target: {fileID: 135369136, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.1312499
+      objectReference: {fileID: 0}
+    - target: {fileID: 175114761, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.46865022
+      objectReference: {fileID: 0}
     - target: {fileID: 349770046, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
       propertyPath: m_Material
       value: 
       objectReference: {fileID: 1924666862}
+    - target: {fileID: 473002488, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.43260026
+      objectReference: {fileID: 0}
+    - target: {fileID: 735385842, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.1312499
+      objectReference: {fileID: 0}
     - target: {fileID: 1010396785, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
       propertyPath: m_Material
       value: 
@@ -551,6 +639,10 @@ PrefabInstance:
       propertyPath: m_Material
       value: 
       objectReference: {fileID: 860048094}
+    - target: {fileID: 1139273739, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.43260026
+      objectReference: {fileID: 0}
     - target: {fileID: 1191441047, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
       propertyPath: m_Material
       value: 
@@ -559,10 +651,22 @@ PrefabInstance:
       propertyPath: m_ParentAnchorPosition.y
       value: -0.4325999
       objectReference: {fileID: 0}
+    - target: {fileID: 1526743722, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: 0.39375007
+      objectReference: {fileID: 0}
+    - target: {fileID: 1533180446, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: 0.39375007
+      objectReference: {fileID: 0}
     - target: {fileID: 1536147639, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
       propertyPath: m_Material
       value: 
       objectReference: {fileID: 234444088}
+    - target: {fileID: 1595419852, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.33704984
+      objectReference: {fileID: 0}
     - target: {fileID: 1634253519, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
       propertyPath: m_ParentAnchorPosition.y
       value: -0.4325999
@@ -595,6 +699,14 @@ PrefabInstance:
       propertyPath: m_Material
       value: 
       objectReference: {fileID: 495387673}
+    - target: {fileID: 1850164211, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: 0.1312499
+      objectReference: {fileID: 0}
+    - target: {fileID: 1967073176, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.46865022
+      objectReference: {fileID: 0}
     - target: {fileID: 2013544219, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
       propertyPath: m_Material
       value: 
@@ -603,6 +715,10 @@ PrefabInstance:
       propertyPath: m_Material
       value: 
       objectReference: {fileID: 1665044432}
+    - target: {fileID: 2100059305, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.33704984
+      objectReference: {fileID: 0}
     - target: {fileID: 2141336369, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
       propertyPath: m_ParentAnchorPosition.y
       value: -0.46864986
@@ -789,7 +905,31 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+--- !u!134 &1440494495
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: DynamicMaterial
+  dynamicFriction: 0.5
+  staticFriction: 0.5
+  bounciness: 0
+  frictionCombine: 3
+  bounceCombine: 0
 --- !u!134 &1480215716
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: DynamicMaterial
+  dynamicFriction: 0.5
+  staticFriction: 0.5
+  bounciness: 0
+  frictionCombine: 3
+  bounceCombine: 0
+--- !u!134 &1535132397
 PhysicMaterial:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -808,6 +948,50 @@ PrefabInstance:
   m_Modification:
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 135369136, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.1312499
+      objectReference: {fileID: 0}
+    - target: {fileID: 175114761, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.46865022
+      objectReference: {fileID: 0}
+    - target: {fileID: 473002488, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.43260026
+      objectReference: {fileID: 0}
+    - target: {fileID: 735385842, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.1312499
+      objectReference: {fileID: 0}
+    - target: {fileID: 1139273739, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.43260026
+      objectReference: {fileID: 0}
+    - target: {fileID: 1526743722, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: 0.39375007
+      objectReference: {fileID: 0}
+    - target: {fileID: 1533180446, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: 0.39375007
+      objectReference: {fileID: 0}
+    - target: {fileID: 1595419852, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.33704984
+      objectReference: {fileID: 0}
+    - target: {fileID: 1850164211, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: 0.1312499
+      objectReference: {fileID: 0}
+    - target: {fileID: 1967073176, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.46865022
+      objectReference: {fileID: 0}
+    - target: {fileID: 2100059305, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_ParentAnchorPosition.y
+      value: -0.33704984
+      objectReference: {fileID: 0}
     - target: {fileID: 115681790512386014, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
       propertyPath: m_ParentAnchorPosition.y
       value: 0.39375007
@@ -1077,6 +1261,58 @@ PrefabInstance:
   m_Modification:
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 161803917, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 2112982023}
+    - target: {fileID: 379503537, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 626880229}
+    - target: {fileID: 500792423, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 1440494495}
+    - target: {fileID: 570365868, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 2006148526}
+    - target: {fileID: 719352325, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 1535132397}
+    - target: {fileID: 722991166, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 47116089}
+    - target: {fileID: 845430373, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 795369181}
+    - target: {fileID: 982559613, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 2115511600}
+    - target: {fileID: 1089903358, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 435003155}
+    - target: {fileID: 1144313024, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 2076212282}
+    - target: {fileID: 1146025946, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 213184487}
+    - target: {fileID: 1369619920, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 618674151}
+    - target: {fileID: 1955043668, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 1728261773}
     - target: {fileID: 18005327099050372, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
       propertyPath: m_Material
       value: 
@@ -1179,6 +1415,18 @@ PrefabInstance:
       objectReference: {fileID: 1225020432}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+--- !u!134 &1728261773
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: DynamicMaterial
+  dynamicFriction: 0.5
+  staticFriction: 0.5
+  bounciness: 0
+  frictionCombine: 3
+  bounceCombine: 0
 --- !u!134 &1752523263
 PhysicMaterial:
   m_ObjectHideFlags: 0
@@ -1212,6 +1460,18 @@ PhysicMaterial:
   m_Name: DynamicMaterial
   dynamicFriction: 0.5
   staticFriction: 0.5
+  bounciness: 0
+  frictionCombine: 3
+  bounceCombine: 0
+--- !u!134 &2006148526
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: DynamicMaterial
+  dynamicFriction: 0.9
+  staticFriction: 0.9
   bounciness: 0
   frictionCombine: 3
   bounceCombine: 0
@@ -1304,3 +1564,70 @@ PrefabInstance:
       objectReference: {fileID: 963194227}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+--- !u!134 &2076212282
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: DynamicMaterial
+  dynamicFriction: 0.5
+  staticFriction: 0.5
+  bounciness: 0
+  frictionCombine: 3
+  bounceCombine: 0
+--- !u!1 &2092080519
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2092080520}
+  m_Layer: 0
+  m_Name: GeneratedArticulationRobot
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2092080520
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2092080519}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 7
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!134 &2112982023
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: DynamicMaterial
+  dynamicFriction: 0.5
+  staticFriction: 0.5
+  bounciness: 0
+  frictionCombine: 3
+  bounceCombine: 0
+--- !u!134 &2115511600
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: DynamicMaterial
+  dynamicFriction: 0.5
+  staticFriction: 0.5
+  bounciness: 0
+  frictionCombine: 3
+  bounceCombine: 0

@@ -10,6 +10,7 @@ public class BodyHit : MonoBehaviour
     {
         agent = GetComponentInParent<RobotWalker>();
     }
+
     private void OnCollisionStay(Collision collision)
     {
         agent.BodyHit(name, collision);

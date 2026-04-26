@@ -89,7 +89,6 @@ gamma: 0.995
 CD "C:\private\Agents-Robot-For-Unity"
  #家里电脑
 CD "F:\GameProject\AI Robot"
-
 mlagents-learn "Assets\ML-Agents\training_config.yaml" `
 --run-id=RobotWalker `
 --env="Build\AI Robot.exe" `
@@ -99,6 +98,17 @@ mlagents-learn "Assets\ML-Agents\training_config.yaml" `
 --base-port=6000 `
 --no-graphics `
 --resume 
+
+CD "F:\GameProject\AI Robot"
+mlagents-learn "Assets\ML-Agents\training_config.yaml" `
+--run-id=RobotWalkerCustom `
+--env="Build\RobotWalkerCustom\AI Robot.exe" `
+--results-dir="Assets\ML-Agents\MLModels" `
+--time-scale=20 `
+--num-envs=15 `
+--base-port=6000 `
+--no-graphics `
+--force
 # 训练完成后查看结果
 tensorboard --logdir=results
 #------------公司电脑------------------

@@ -339,11 +339,11 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
 
         // 腿和手臂的粗细（基于真实人体比例）
         // 成年人大腿粗细约为身高的0.06，小腿约为大腿的0.7
-        float thighThickness = robotHeight * 0.06f;
-        float shinThickness = thighThickness * 0.7f;
+        float thighThickness = robotHeight * 0.08f;
+        float shinThickness = thighThickness * 0.8f;
 
         // 成年人上臂粗细约为身高的0.05，前臂约为上臂的0.8
-        float upperArmThickness = robotHeight * 0.05f;
+        float upperArmThickness = robotHeight * 0.07f;
         float lowerArmThickness = upperArmThickness * 0.8f;
 
         // 成年人手掌宽度约为身高的0.06
@@ -480,14 +480,14 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             hipTwist, Reverse(hipSwingY), Reverse(hipSwingZ), kneeTwist, ankleTwist, Reverse(ankleSwingY), Reverse(ankleSwingZ),
             footFriction);
 
-        CreateArm(torso.transform, "Left", -(shoulderOffsetX + upperArmVisualSize.x * 0.5f), upperArmVisualSize, lowerArmVisualSize,
+        CreateArm(torso.transform, "Left", -shoulderOffsetX, upperArmVisualSize, lowerArmVisualSize,
             upperArmLength, lowerArmLength, upperArmMass, lowerArmMass,
             shoulderAttachLocalY,
             angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
             shoulderJointStiffness, elbowJointStiffness,
             shoulderTwist, shoulderSwingY, shoulderSwingZ, elbowTwist);
 
-        CreateArm(torso.transform, "Right", shoulderOffsetX + upperArmVisualSize.x * 0.5f, upperArmVisualSize, lowerArmVisualSize,
+        CreateArm(torso.transform, "Right", shoulderOffsetX, upperArmVisualSize, lowerArmVisualSize,
             upperArmLength, lowerArmLength, upperArmMass, lowerArmMass,
             shoulderAttachLocalY,
             angularDamping, jointFriction, passiveJointForceLimit, globalStiffnessScale,
@@ -561,8 +561,8 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         // 设置髋关节的初始前倾角度（绕x轴旋转）
         hipJoint.transform.localRotation = Quaternion.Euler(-initialKneeBendAngleDeg * 0.5f, 0, 0);
 
-        // 在髋关节节点下添加大腿视觉/碰撞实体
-        CreateVisualCollider(hipJoint.transform, side + "_Thigh_Visual", upperLegVisualSize, new Vector3(0, -upperLegLength * 0.5f, 0));
+        // 在髋关节节点下添加大腿视觉/碰撞实体（使用胶囊体）
+        CreateVisualCollider(hipJoint.transform, side + "_Thigh_Visual", upperLegVisualSize, new Vector3(0, -upperLegLength * 0.5f, 0), shape: PrimitiveType.Capsule);
 
         // 膝关节节点（只允许向前弯曲，使用RevoluteJoint）
         var kneeJoint = CreateJointNode(
@@ -587,8 +587,8 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         // 设置膝关节的初始弯曲角度（绕x轴旋转）
         kneeJoint.transform.localRotation = Quaternion.Euler(initialKneeBendAngleDeg, 0, 0);
 
-        // 在膝关节节点下添加小腿视觉/碰撞实体
-        CreateVisualCollider(kneeJoint.transform, side + "_Shin_Visual", lowerLegVisualSize, new Vector3(0, -lowerLegLength * 0.5f, 0));
+        // 在膝关节节点下添加小腿视觉/碰撞实体（使用胶囊体）
+        CreateVisualCollider(kneeJoint.transform, side + "_Shin_Visual", lowerLegVisualSize, new Vector3(0, -lowerLegLength * 0.5f, 0), shape: PrimitiveType.Capsule);
 
         // 踝关节节点（使用球形关节）
         var ankleJoint = CreateJointNode(
@@ -647,7 +647,7 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         float armDirection = (side == "Left") ? -1f : 1f;
 
         // 肩关节旋转
-        Quaternion shoulderRotation = Quaternion.Euler(0, 0, 0);
+        Quaternion shoulderRotation = Quaternion.Euler(0, 0, 90*armDirection);
 
         // 肩关节节点（使用球形关节）
         var shoulderJoint = CreateJointNode(
@@ -673,9 +673,9 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             twistLimit: shoulderTwist
         );
 
-        // 在肩关节节点下添加上臂视觉/碰撞实体（Y轴方向，因为关节已旋转90度）
+        // 在肩关节节点下添加上臂视觉/碰撞实体（Y轴方向，因为关节已旋转90度）- 使用胶囊体
         CreateVisualCollider(shoulderJoint.transform, side + "_UpperArm_Visual", upperArmVisualSize,
-            new Vector3(0, -upperArmLength * 0.5f, 0));
+            new Vector3(0, -upperArmLength * 0.5f, 0), shape: PrimitiveType.Capsule);
 
         // 肘关节节点（只允许向前弯曲）
         var elbowJoint = CreateJointNode(
@@ -697,9 +697,9 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
             upperLimitRad: elbowTwist.y
         );
 
-        // 在肘关节节点下添加下臂视觉/碰撞实体（Y轴方向）
+        // 在肘关节节点下添加下臂视觉/碰撞实体（Y轴方向）- 使用胶囊体
         CreateVisualCollider(elbowJoint.transform, side + "_LowerArm_Visual", lowerArmVisualSize,
-            new Vector3(0, -lowerArmLength * 0.5f, 0));
+            new Vector3(0, -lowerArmLength * 0.5f, 0), shape: PrimitiveType.Capsule);
 
         // 在手掌位置创建空节点（用于判断手的位置）
         GameObject handEmptyNode = new GameObject(side + "_Hand_Empty");
@@ -873,14 +873,24 @@ public class ArticulationRobotGeneratorWindow : EditorWindow
         string name,
         Vector3 size,
         Vector3 localPos,
-        float friction = 0.5f)
+        float friction = 0.5f,
+        PrimitiveType shape = PrimitiveType.Cube)
     {
-        GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        GameObject go = GameObject.CreatePrimitive(shape);
         go.name = name;
         go.transform.SetParent(parent, false);
         go.transform.localPosition = localPos;
         go.transform.localRotation = Quaternion.identity;
-        go.transform.localScale = size; // 实体可以缩放
+
+        // 胶囊体默认长度是2，立方体默认是1，所以胶囊体Y轴缩放需要减半
+        if (shape == PrimitiveType.Capsule)
+        {
+            go.transform.localScale = new Vector3(size.x, size.y * 0.5f, size.z);
+        }
+        else
+        {
+            go.transform.localScale = size;
+        }
 
         // 生成用的方块不需要渲染器（训练时更干净，也避免误导）
         var renderer = go.GetComponent<Renderer>();

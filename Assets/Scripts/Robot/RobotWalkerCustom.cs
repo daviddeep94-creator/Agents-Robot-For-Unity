@@ -2,22 +2,21 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Unity.Mathematics;
 using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
 using Unity.MLAgents.Sensors;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-public enum TargetType
-{
-    None = 0,
-    BalancePoint = 1,
-    Move,
-}
 
-public class RobotWalker : Agent
+
+public class RobotWalkerCustom : Agent
 {
     public Camera mainCamera;
+    [Header("模仿训练参考")]
+    public AnimationStateController reference;
+
     [Header("机器人配置")]
     [SerializeField] private ArticulationBody robotRoot;
 
@@ -61,17 +60,15 @@ public class RobotWalker : Agent
     [SerializeField] private float targetSpawnRange = 15f;
 
     private ArticulationBody[] allJoints;
-    private HumanBodyBones[] allJointsBones;
+    public HumanBodyBones[] allJointsBones;
     private float maxStiffness;
-    private int pelvisIndex, torsoIndex;
+    private int pelvisIndex, torsoIndex, headIndex;
     private int leftHipIndex, rightHipIndex;
     private int leftKneeIndex, rightKneeIndex;
-    private int leftAnkleIndex, rightAnkleIndex;
+    private int leftFeetIndex, rightFeetIndex;
     private int leftShoulderIndex, rightShoulderIndex;
     private int leftElbowIndex, rightElbowIndex;
-
-    [SerializeField] private Transform leftHandEmpty;
-    [SerializeField] private Transform rightHandEmpty;
+    Transform leftHandEmpty, rightHandEmpty;
 
     private Vector3[] initialJointPositions;
     private Quaternion[] initialJointRotations;
@@ -92,8 +89,11 @@ public class RobotWalker : Agent
     public float maxEpisodeTime = 70f;
 
     float mainCameraDis;
+
+    public Animator animator;
     private void Awake()
     {
+        animator = GetComponentInChildren<Animator>();
         if (targetCube == null)
         {
             GameObject target = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -130,6 +130,14 @@ public class RobotWalker : Agent
     private void InitializeRobot()
     {
         allJoints = robotRoot.GetComponentsInChildren<ArticulationBody>();
+
+        // 获取所有关节对应的 HumanBodyBones
+        allJointsBones = new HumanBodyBones[allJoints.Length];
+        for (int i = 0; i < allJoints.Length; i++)
+        {
+            allJointsBones[i] = GetHumanBodyBoneFromJointName(allJoints[i].name);
+        }
+
         foreach (var item in allJoints)
         {
             if (item.xDrive.stiffness > maxStiffness)
@@ -138,22 +146,28 @@ public class RobotWalker : Agent
                 maxStiffness = item.yDrive.stiffness;
             if (item.zDrive.stiffness > maxStiffness)
                 maxStiffness = item.zDrive.stiffness;
+            if(!item.gameObject.TryGetComponent(out BodyHit1 bodyHit))
+            {
+                bodyHit = item.gameObject.AddComponent<BodyHit1>();
+                bodyHit.agent = this;
+            }
         }
-        pelvisIndex = FindJointIndex("Pelvis_Joint");
-        torsoIndex = FindJointIndex("Torso_Joint");
-        leftHipIndex = FindJointIndex("Left_HipJoint");
-        rightHipIndex = FindJointIndex("Right_HipJoint");
-        leftKneeIndex = FindJointIndex("Left_KneeJoint");
-        rightKneeIndex = FindJointIndex("Right_KneeJoint");
-        leftAnkleIndex = FindJointIndex("Left_AnkleJoint");
-        rightAnkleIndex = FindJointIndex("Right_AnkleJoint");
-        leftShoulderIndex = FindJointIndex("Left_ShoulderJoint");
-        rightShoulderIndex = FindJointIndex("Right_ShoulderJoint");
-        leftElbowIndex = FindJointIndex("Left_ElbowJoint");
-        rightElbowIndex = FindJointIndex("Right_ElbowJoint");
+        pelvisIndex = FindJointIndex("Hips");
+        torsoIndex = FindJointIndex("Spine");
+        headIndex = FindJointIndex("Head");
+        leftHipIndex = FindJointIndex("LeftUpLeg");
+        rightHipIndex = FindJointIndex("RightUpLeg");
+        leftKneeIndex = FindJointIndex("LeftLeg");
+        rightKneeIndex = FindJointIndex("RightLeg");
+        leftFeetIndex = FindJointIndex("LeftFoot");
+        rightFeetIndex = FindJointIndex("RightFoot");
+        leftShoulderIndex = FindJointIndex("LeftArm");
+        rightShoulderIndex = FindJointIndex("RightArm");
+        leftElbowIndex = FindJointIndex("LeftForeArm");
+        rightElbowIndex = FindJointIndex("RightForeArm");
 
-        leftHandEmpty = robotRoot.transform.Find("Torso_Joint/Left_ShoulderJoint/Left_ElbowJoint/Left_Hand_Empty");
-        rightHandEmpty = robotRoot.transform.Find("Torso_Joint/Right_ShoulderJoint/Right_ElbowJoint/Right_Hand_Empty");
+        leftHandEmpty = allJoints[leftElbowIndex].transform.GetChild(0);
+        rightHandEmpty = allJoints[rightElbowIndex].transform.GetChild(0);
 
         SaveInitialJointStates();
     }
@@ -161,8 +175,37 @@ public class RobotWalker : Agent
     private int FindJointIndex(string name)
     {
         for (int i = 0; i < allJoints.Length; i++)
-            if (allJoints[i].name == name) return i;
+            if (allJoints[i].name.Contains(name)) return i;
         return -1;
+    }
+
+    /// <summary>
+    /// 根据关节名称获取对应的 HumanBodyBones
+    /// </summary>
+    private HumanBodyBones GetHumanBodyBoneFromJointName(string jointName)
+    {
+        string name = jointName.ToLower();
+
+        if (name.Contains("pelvis") || name.Contains("hips")) return HumanBodyBones.Hips;
+        if (name.Contains("torso") || name.Contains("spine")) return HumanBodyBones.Spine;
+        if (name.Contains("head")) return HumanBodyBones.Head;
+        if (name.Contains("neck")) return HumanBodyBones.Neck;
+
+        if (name.Contains("left") && (name.Contains("upleg") || name.Contains("hip") || name.Contains("thigh"))) return HumanBodyBones.LeftUpperLeg;
+        if (name.Contains("right") && (name.Contains("upleg") || name.Contains("hip") || name.Contains("thigh"))) return HumanBodyBones.RightUpperLeg;
+        if (name.Contains("left") && (name.Contains("leg") || name.Contains("knee") || name.Contains("shin"))) return HumanBodyBones.LeftLowerLeg;
+        if (name.Contains("right") && (name.Contains("leg") || name.Contains("knee") || name.Contains("shin"))) return HumanBodyBones.RightLowerLeg;
+        if (name.Contains("left") && name.Contains("foot")) return HumanBodyBones.LeftFoot;
+        if (name.Contains("right") && name.Contains("foot")) return HumanBodyBones.RightFoot;
+
+        if (name.Contains("left") && (name.Contains("arm") || name.Contains("shoulder") || name.Contains("upperarm"))) return HumanBodyBones.LeftUpperArm;
+        if (name.Contains("right") && (name.Contains("arm") || name.Contains("shoulder") || name.Contains("upperarm"))) return HumanBodyBones.RightUpperArm;
+        if (name.Contains("left") && (name.Contains("forearm") || name.Contains("elbow") || name.Contains("lowerarm"))) return HumanBodyBones.LeftLowerArm;
+        if (name.Contains("right") && (name.Contains("forearm") || name.Contains("elbow") || name.Contains("lowerarm"))) return HumanBodyBones.RightLowerArm;
+        if (name.Contains("left") && name.Contains("hand")) return HumanBodyBones.LeftHand;
+        if (name.Contains("right") && name.Contains("hand")) return HumanBodyBones.RightHand;
+
+        return HumanBodyBones.LastBone;
     }
 
     private void SaveInitialJointStates()
@@ -201,6 +244,7 @@ public class RobotWalker : Agent
 
     public void ResetRobotPose()
     {
+        Debug.Log("重置机器人姿势");
         allJoints[pelvisIndex].gameObject.SetActive(false);
         for (int i = 0; i < allJoints.Length; i++)
         {
@@ -236,8 +280,19 @@ public class RobotWalker : Agent
 
         allJoints[pelvisIndex].gameObject.SetActive(true);
 
+        if (randomizeWalkSpeedEachEpisode)
+        {
+            if (reference)
+            {
+                reference.SetRandomBlend();
+                MTargetWalkingSpeed = reference.AnimationSpeed;
+            }
+            else
+            {
+                MTargetWalkingSpeed = randomizeWalkSpeedEachEpisode ? Random.Range(0.1f, m_maxWalkingSpeed) : MTargetWalkingSpeed;
+            }
+        }
         //设置我们的目标行走速度
-        MTargetWalkingSpeed = randomizeWalkSpeedEachEpisode ? Random.Range(0.1f, m_maxWalkingSpeed) : MTargetWalkingSpeed;
     }
 
     /// <summary>
@@ -288,9 +343,9 @@ public class RobotWalker : Agent
         spawnYRotation = allJoints[pelvisIndex].transform.eulerAngles.y;
     }
 
-    Dictionary<string,bool> bodyOnGround = new Dictionary<string, bool>();
+    Dictionary<GameObject,bool> bodyOnGround = new Dictionary<GameObject, bool>();
     float hitTime;
-    public void BodyHit(string name, Collision collision)
+    public void BodyHit(GameObject name, Collision collision)
     {
         if (collision.gameObject.layer == 3)
         {
@@ -372,8 +427,8 @@ public class RobotWalker : Agent
                 sensor.AddObservation(joint.xDrive.stiffness / maxStiffness);
             }
 
-            if(bodyOnGround.ContainsKey(joint.name))
-                sensor.AddObservation(bodyOnGround[joint.name]);
+            if(bodyOnGround.ContainsKey(joint.gameObject))
+                sensor.AddObservation(bodyOnGround[joint.gameObject]);
             else
                 sensor.AddObservation(false);
         }
@@ -412,6 +467,8 @@ public class RobotWalker : Agent
         ApplyJointForces(actions.ContinuousActions);
 
         CalculateReward();
+
+        ImitationTraining();
 
         CheckDone();
 
@@ -459,39 +516,42 @@ public class RobotWalker : Agent
             float tStiffness = Mathf.Clamp01((actions[index] + 1f) / 2f);
             float targetStiffness = Mathf.Lerp(0f, initialJointStiffness[i], tStiffness);
 
-            index++;
-            float tX = Mathf.Clamp01((actions[index] + 1f) / 2f);
-            jointEnergy+= EnergyConsumption(index, tX);
+            if (joint.xDrive.lowerLimit != joint.xDrive.upperLimit && joint.twistLock != ArticulationDofLock.LockedMotion)
+            {
+                index++;
+                float tX = Mathf.Clamp01((actions[index] + 1f) / 2f);
+                jointEnergy += EnergyConsumption(index, tX);
 
-            ArticulationDrive xDrive = joint.xDrive;
-            float target = Mathf.Lerp(joint.xDrive.lowerLimit, joint.xDrive.upperLimit, tX);
-            xDrive.target = Mathf.Lerp(xDrive.target, target, targetLerp);
-            xDrive.stiffness = targetStiffness;
-            joint.xDrive = xDrive;
+                ArticulationDrive xDrive = joint.xDrive;
+                float target = Mathf.Lerp(joint.xDrive.lowerLimit, joint.xDrive.upperLimit, tX);
+                xDrive.target = Mathf.Lerp(xDrive.target, target, targetLerp);
+                xDrive.stiffness = targetStiffness;
+                joint.xDrive = xDrive;
+            }
 
             if (joint.jointType == ArticulationJointType.SphericalJoint)
             {
-                if (joint.yDrive.lowerLimit != joint.yDrive.upperLimit)
+                if (joint.yDrive.lowerLimit != joint.yDrive.upperLimit && joint.swingYLock != ArticulationDofLock.LockedMotion)
                 {
                     index++;
                     float tY = Mathf.Clamp01((actions[index] + 1f) / 2f);
                     jointEnergy += EnergyConsumption(index, tY);
 
                     ArticulationDrive yDrive = joint.yDrive;
-                    target = Mathf.Lerp(joint.yDrive.lowerLimit, joint.yDrive.upperLimit, tY);
+                    float target = Mathf.Lerp(joint.yDrive.lowerLimit, joint.yDrive.upperLimit, tY);
                     yDrive.target = Mathf.Lerp(yDrive.target, target, targetLerp);
                     yDrive.stiffness = targetStiffness; // 三个轴使用同一个 stiffness
                     joint.yDrive = yDrive;
                 }   
 
-                if (joint.zDrive.lowerLimit != joint.zDrive.upperLimit)
+                if (joint.zDrive.lowerLimit != joint.zDrive.upperLimit && joint.swingZLock != ArticulationDofLock.LockedMotion)
                 {
                     index++;
                     float tZ = Mathf.Clamp01((actions[index] + 1f) / 2f);
                     jointEnergy += EnergyConsumption(index, tZ);
 
                     ArticulationDrive zDrive = joint.zDrive;
-                    target = Mathf.Lerp(joint.zDrive.lowerLimit, joint.zDrive.upperLimit, tZ);
+                    float target = Mathf.Lerp(joint.zDrive.lowerLimit, joint.zDrive.upperLimit, tZ);
                     zDrive.target = Mathf.Lerp(zDrive.target, target, targetLerp);
                     zDrive.stiffness = targetStiffness; // 三个轴使用同一个 stiffness
                     joint.zDrive = zDrive;
@@ -517,15 +577,15 @@ public class RobotWalker : Agent
         //如果完美匹配，该奖励将接近1，如果偏离则接近0
         var matchSpeedReward = GetMatchingVelocityReward(cubeForward * MTargetWalkingSpeed, GetAvgVelocity());
 
-        Vector3 forward = allJoints[torsoIndex].transform.forward;
+        Vector3 forward = allJoints[headIndex].transform.forward;
         forward.y = 0;
         float facing = (Vector3.Dot(forward, orientationCube.forward) + 1) * .5f;
 
         //最高得分是1，速度匹配奖励乘以朝向奖励，确保只有当朝向正确时才有高分
         AddReward(matchSpeedReward * facing);
        
-        float leftFeetZ = orientationCube.transform.InverseTransformPoint(allJoints[leftAnkleIndex].transform.position).z;
-        float rightFeetZ = orientationCube.transform.InverseTransformPoint(allJoints[rightAnkleIndex].transform.position).z;
+        float leftFeetZ = orientationCube.transform.InverseTransformPoint(allJoints[leftFeetIndex].transform.position).z;
+        float rightFeetZ = orientationCube.transform.InverseTransformPoint(allJoints[rightFeetIndex].transform.position).z;
         bool leftFoward = leftFeetZ > rightFeetZ;
         //如果发生一次交叉就给奖励，如果ai钻漏洞，降低分数
         if (leftFoward != lastLeftFoward)
@@ -533,6 +593,25 @@ public class RobotWalker : Agent
         lastLeftFoward = leftFoward;
     }
     bool lastLeftFoward;
+
+    public void ImitationTraining()
+    {
+        if (!reference) return;
+
+        reference.GetDiff(orientationCube, animator, allJointsBones, out float disDiff, out float angleDiff);
+
+        disDiff = Mathf.Clamp(disDiff, 0, 0.5f) / 0.5f;
+        angleDiff = Mathf.Clamp(angleDiff, 0, 90) / 90f;
+        float diffReward = (disDiff + angleDiff) / 2f;
+
+        float disReward = Mathf.Pow(1 - Mathf.Pow(diffReward, 2), 2);
+        Debug.Log("模仿匹配度" + disReward);
+        //限制最高奖励为0.3
+        disReward *= 0.3f;
+        
+        AddReward(disReward);
+    }
+
     //平均速度与目标行走速度差异的归一化值
     public float GetMatchingVelocityReward(Vector3 velocityGoal, Vector3 actualVelocity)
     {
@@ -571,8 +650,9 @@ public class RobotWalker : Agent
         {
             if (body.Value)
             {
-                if (body.Key != "Left_AnkleJoint" && body.Key != "Right_AnkleJoint" && body.Key != "Right_KneeJoint" && body.Key != "Left_KneeJoint")
+                if (body.Key != allJoints[leftFeetIndex].gameObject && body.Key != allJoints[rightFeetIndex].gameObject /*&& body.Key != allJoints[rightKneeIndex] && body.Key != allJoints[leftKneeIndex]*/)
                 {
+                    Debug.Log("身体部位 " + body.Key.name + " 接触地面");
                     AddReward(-1f);
                     EndEpisode();
                 }

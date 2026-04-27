@@ -60,7 +60,8 @@ public class RobotWalkerCustom : Agent
     [SerializeField] private float targetSpawnRange = 15f;
 
     private ArticulationBody[] allJoints;
-    public HumanBodyBones[] allJointsBones;
+    private HumanBodyBones[] allJointsBones;
+    private HumanBodyBones[] customBones = new HumanBodyBones[] { HumanBodyBones.LeftLowerArm, HumanBodyBones.RightLowerArm, HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg };
     private float maxStiffness;
     private int pelvisIndex, torsoIndex, headIndex;
     private int leftHipIndex, rightHipIndex;
@@ -584,13 +585,13 @@ public class RobotWalkerCustom : Agent
         //最高得分是1，速度匹配奖励乘以朝向奖励，确保只有当朝向正确时才有高分
         AddReward(matchSpeedReward * facing);
        
-        float leftFeetZ = orientationCube.transform.InverseTransformPoint(allJoints[leftFeetIndex].transform.position).z;
-        float rightFeetZ = orientationCube.transform.InverseTransformPoint(allJoints[rightFeetIndex].transform.position).z;
-        bool leftFoward = leftFeetZ > rightFeetZ;
-        //如果发生一次交叉就给奖励，如果ai钻漏洞，降低分数
-        if (leftFoward != lastLeftFoward)
-            AddReward(0.2f);
-        lastLeftFoward = leftFoward;
+        //float leftFeetZ = orientationCube.transform.InverseTransformPoint(allJoints[leftFeetIndex].transform.position).z;
+        //float rightFeetZ = orientationCube.transform.InverseTransformPoint(allJoints[rightFeetIndex].transform.position).z;
+        //bool leftFoward = leftFeetZ > rightFeetZ;
+        ////如果发生一次交叉就给奖励，如果ai钻漏洞，降低分数
+        //if (leftFoward != lastLeftFoward)
+        //    AddReward(0.2f);
+        //lastLeftFoward = leftFoward;
     }
     bool lastLeftFoward;
 
@@ -598,16 +599,17 @@ public class RobotWalkerCustom : Agent
     {
         if (!reference) return;
 
-        reference.GetDiff(orientationCube, animator, allJointsBones, out float disDiff, out float angleDiff);
-
-        disDiff = Mathf.Clamp(disDiff, 0, 0.5f) / 0.5f;
-        angleDiff = Mathf.Clamp(angleDiff, 0, 90) / 90f;
+        reference.GetDiff(orientationCube, animator, customBones, out float disDiff, out float angleDiff);
+        float maxDisDiff = 0.3f; // 根据实际情况调整
+        float maxAngleDiff = 45f; // 根据实际情况调整
+        disDiff = Mathf.Clamp(disDiff, 0, maxDisDiff) / maxDisDiff;
+        angleDiff = Mathf.Clamp(angleDiff, 0, maxAngleDiff) / maxAngleDiff;
         float diffReward = (disDiff + angleDiff) / 2f;
 
         float disReward = Mathf.Pow(1 - Mathf.Pow(diffReward, 2), 2);
         Debug.Log("模仿匹配度" + disReward);
-        //限制最高奖励为0.3
-        disReward *= 0.3f;
+        //限制最高奖励为1
+        disReward *= 1f;
         
         AddReward(disReward);
     }

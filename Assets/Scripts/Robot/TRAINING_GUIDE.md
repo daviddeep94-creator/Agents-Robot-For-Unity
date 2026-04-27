@@ -87,8 +87,9 @@ gamma: 0.995
 ```bash
 # 公司电脑
 CD "C:\private\Agents-Robot-For-Unity"
- #家里电脑
+# 家里电脑
 CD "F:\GameProject\AI Robot"
+# 脚本生成机器人
 mlagents-learn "Assets\ML-Agents\training_config.yaml" `
 --run-id=RobotWalker `
 --env="Build\AI Robot.exe" `
@@ -98,8 +99,7 @@ mlagents-learn "Assets\ML-Agents\training_config.yaml" `
 --base-port=6000 `
 --no-graphics `
 --resume 
-
-CD "F:\GameProject\AI Robot"
+# Xbot模型机器人
 mlagents-learn "Assets\ML-Agents\training_config.yaml" `
 --run-id=RobotWalkerCustom `
 --env="Build\RobotWalkerCustom\AI Robot.exe" `

@@ -297,6 +297,10 @@ PrefabInstance:
       propertyPath: m_RootOrder
       value: 5
       objectReference: {fileID: 0}
+    - target: {fileID: 8357415407684363826, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
+      propertyPath: m_Model
+      value: 
+      objectReference: {fileID: 5022602860645237092, guid: c33aa6d57822bf6449c151033caac6a6, type: 3}
     - target: {fileID: 8357415407958212718, guid: 5aa29ecbac16ac347bc3598ba5254911, type: 3}
       propertyPath: m_ParentAnchorPosition.x
       value: 0.15162815
